@@ -1,0 +1,641 @@
+{
+  "meta": {
+    "title": "NEXUS — jeu de démonstration du moteur d'agrégation",
+    "note": "Mesures fictives sauf le chiffre JCI officiel. Chaque cas reproduit un piège réellement observé dans le rapport JCI 2025 (Tier 1 §Q) ou dans les 5 fixtures Tier 1.",
+    "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1"
+  },
+  "valid": [
+    {
+      "_case": "OL 1 — formées, agrégeable",
+      "measurement_id": "MO-CI-BOUAKE-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "jeunes formés à l'entrepreneuriat",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 45,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-CI-01",
+        "name": "Boost PME 2025"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "AFME",
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "GEO-FROM-COUNTRY",
+          "confidence": "M"
+        },
+        "country_iso2": {
+          "value": "CI"
+        },
+        "local_organization": {
+          "value": "JCI Bouaké Lumière"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "45 jeunes ont suivi le bootcamp de 3 jours"
+      },
+      "verification_status": "validated",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "PRJ-CI-01"
+      }
+    },
+    {
+      "_case": "OL 2 — vocabulaire différent (anglais, 'trained'), même concept → doit s'agréger avec la précédente",
+      "measurement_id": "MO-PH-MANILA-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "youth trained in livelihood skills",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 80,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-PH-01",
+        "name": "Kalinga Kits"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "ASPAC"
+        },
+        "country_iso2": {
+          "value": "PH"
+        },
+        "local_organization": {
+          "value": "JCI Manila"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "80 youth were trained in livelihood skills"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "PRJ-PH-01"
+      }
+    },
+    {
+      "_case": "OL 3 — valeur approximative : l'agrégat entier devient approximatif (AGG-3)",
+      "measurement_id": "MO-PE-LIMA-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "alrededor de 30 jóvenes capacitados",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "M"
+      },
+      "value": 30,
+      "value_status": "extracted",
+      "value_qualifier": "approx",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-PE-01",
+        "name": "Río Limpio Chili"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "AMERICA"
+        },
+        "country_iso2": {
+          "value": "PE"
+        },
+        "local_organization": {
+          "value": "JCI Lima"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "alrededor de 30 jóvenes capacitados"
+      },
+      "verification_status": "validated",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "PRJ-PE-01"
+      }
+    },
+    {
+      "_case": "PIÈGE 1 — portée Facebook : ressemble à des personnes, n'en est pas (DQC-08). S'agrège avec d'autres vues, jamais avec des personnes : clés d'équivalence différentes (D-14)",
+      "measurement_id": "MO-CI-BOUAKE-REACH",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "COMM_AUDIENCE",
+      "metric_label_source": "personnes touchées par le post Facebook",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "M"
+      },
+      "value": 12000,
+      "value_status": "extracted",
+      "value_qualifier": "approx",
+      "unit": {
+        "code": "view",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-CI-01",
+        "name": "Boost PME 2025"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "audience",
+        "dedup_basis": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "AFME"
+        },
+        "country_iso2": {
+          "value": "CI"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "le post a touché environ 12 000 personnes sur Facebook"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": true
+      }
+    },
+    {
+      "_case": "PIÈGE 2 — TWINNING, déclaration côté Bénin (même projet que la suivante)",
+      "measurement_id": "MO-BJ-TWIN-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "jeunes formés au numérique",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 60,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-BJ-TWIN",
+        "name": "Digital pour tous"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "AFME"
+        },
+        "country_iso2": {
+          "value": "BJ"
+        },
+        "local_organization": {
+          "value": "JCI Cotonou"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "60 jeunes formés au numérique dans le cadre du jumelage"
+      },
+      "verification_status": "validated",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "TWIN-BJ-CA-2025"
+      }
+    },
+    {
+      "_case": "PIÈGE 2 bis — TWINNING, déclaration côté Canada du MÊME projet (R6 / TC5)",
+      "measurement_id": "MO-CA-TWIN-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "youth trained through our twinning project",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 60,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-CA-TWIN",
+        "name": "Digital for All"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "AMERICA"
+        },
+        "country_iso2": {
+          "value": "CA"
+        },
+        "local_organization": {
+          "value": "JCI Montréal"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "60 youth trained through our twinning project with JCI Cotonou"
+      },
+      "verification_status": "validated",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "TWIN-BJ-CA-2025",
+        "suspected_duplicate_of": [
+          "MO-BJ-TWIN-TRAINED"
+        ]
+      }
+    },
+    {
+      "_case": "PIÈGE 3 — entonnoir : 200 touchées dont 120 formées. Reliées, non additionnables [p.92]",
+      "measurement_id": "MO-DE-REACHED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "personnes touchées par la campagne de formation",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "M"
+      },
+      "value": 200,
+      "value_status": "extracted",
+      "value_qualifier": "at_least",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-DE-01",
+        "name": "Q2 Training Academy"
+      },
+      "population": {
+        "internal_external": "internal",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "EUROPE"
+        },
+        "country_iso2": {
+          "value": "DE"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "over 200 members took part in the training programme"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "PRJ-DE-01-A"
+      }
+    },
+    {
+      "_case": "PIÈGE 3 bis — les 120 diplômées sont un SOUS-ENSEMBLE des 200 ci-dessus",
+      "measurement_id": "MO-DE-GRADUATED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "participants ayant obtenu la certification",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 120,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-DE-02",
+        "name": "Q2 Training Academy"
+      },
+      "population": {
+        "internal_external": "internal",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "EUROPE"
+        },
+        "country_iso2": {
+          "value": "DE"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "120 of them received the certification"
+      },
+      "verification_status": "reported",
+      "relations": [
+        {
+          "relation_type": "subset_of",
+          "measurement_id": "MO-DE-REACHED",
+          "note": "les 120 certifiés font partie des 200 participants"
+        }
+      ],
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "PRJ-DE-02"
+      }
+    },
+    {
+      "_case": "PIÈGE 4 — membres JCI vs communautés externes : ne s'additionnent jamais (S6 / R7)",
+      "measurement_id": "MO-DE-MEMBERS-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "members trained at the Area Conference",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi la formation complète"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 340,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "event",
+        "id": "EVT-EU-AC-2025",
+        "name": "European Conference 2025"
+      },
+      "population": {
+        "internal_external": "internal",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "geographic_area": {
+          "value": "EUROPE"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "340 members attended the training sessions"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": true,
+        "dedup_key": "EVT-EU-AC-2025"
+      }
+    },
+    {
+      "_case": "PIÈGE 5 — chiffre JCI officiel sous conflit documentaire ouvert (DQC-05)",
+      "measurement_id": "MO-JCI-VOLUNTEERS",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "VOLUNTEERS",
+      "metric_label_source": "Total Number of Volunteers Engaged",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "INPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "source_wording_class": "Measurable outcomes",
+      "value": 42401,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "network",
+        "id": "JCI_GLOBAL",
+        "name": "JCI"
+      },
+      "population": {
+        "internal_external": "mixed",
+        "count_type": "unknown",
+        "dedup_basis": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "86",
+        "section": "Community Impact",
+        "quote": "42,401 Total Number of Volunteers Engaged"
+      },
+      "verification_status": "reported",
+      "dq_refs": [
+        "DQC-05"
+      ],
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "OPEN_CONFLICT"
+      }
+    },
+    {
+      "_case": "PIÈGE 6 — graphique illisible : null, jamais 0 (VDX / règle P4)",
+      "measurement_id": "MO-VDX-MEMBERS-AREA",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "MEMBERS_BY_AREA",
+      "metric_label_source": "members per Area (chart)",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "CONTEXT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "M"
+      },
+      "value": null,
+      "value_status": "visual_data_not_extracted",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "network",
+        "id": "JCI_GLOBAL"
+      },
+      "population": {
+        "internal_external": "internal",
+        "count_type": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "9",
+        "section": "Network",
+        "quote": "[chart: members per Area — values not legible in the text layer]"
+      },
+      "verification_status": "reported",
+      "dq_refs": [
+        "VDX-01"
+      ],
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "UNKNOWN_VALUE"
+      }
+    }
+  ]
+}

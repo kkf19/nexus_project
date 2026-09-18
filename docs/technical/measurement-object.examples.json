@@ -1,0 +1,656 @@
+{
+  "meta": {
+    "title": "NEXUS Measurement Object v1 — worked examples",
+    "note": "valid[] must all pass measurement-object.schema.json. invalid[] must all FAIL, each for the stated reason — they are the negative tests of the schema, in the spirit of validator_negative_tests.json (Tier 1/Tier 2).",
+    "amendments": "2026-09-18: D-11 (period.type = reporting_year for project measurements, dates kept) and D-14 (aggregable = individual eligibility) applied to MO-TC1-TRAINED and MO-TC1-REACH."
+  },
+  "valid": [
+    {
+      "_case": "JCI official network figure, blocked by an open conflict",
+      "measurement_id": "MO-JCI-VOL-2025",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "VOLUNTEERS",
+      "metric_label_source": "Total Number of Volunteers Engaged",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "INPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "standard": "PROPOSED_STANDARD:IAOOI-v0",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "source_wording_class": "Measurable outcomes",
+      "value": 42401,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "network",
+        "id": "JCI_GLOBAL",
+        "name": "JCI"
+      },
+      "population": {
+        "internal_external": "mixed",
+        "count_type": "unknown",
+        "dedup_basis": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "86",
+        "section": "Community Impact",
+        "quote": "42,401 Total Number of Volunteers Engaged"
+      },
+      "verification_status": "reported",
+      "dq_refs": [
+        "DQC-05"
+      ],
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "OPEN_CONFLICT",
+        "equivalence_key": null
+      }
+    },
+    {
+      "_case": "Local submission, validated, aggregable",
+      "measurement_id": "MO-TC1-TRAINED",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "jeunes formés à l'entrepreneuriat",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi les 3 jours complets",
+        "layer": "LOCAL_REPORTED_FACT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "standard": "PROPOSED_STANDARD:IAOOI-v0",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "source_wording_class": null,
+      "taxonomy_refs": {
+        "area_of_opportunity": [
+          "BE"
+        ],
+        "programme": [],
+        "activity_type": [
+          "TRAINING_WORKSHOP"
+        ],
+        "target_group": [
+          "ENTREPRENEURS_BUSINESSES"
+        ],
+        "sdgs": [
+          {
+            "goal": 8,
+            "role": "primary"
+          },
+          {
+            "goal": 4,
+            "role": "secondary"
+          }
+        ],
+        "layer": "SEMANTIC_INTERPRETATION"
+      },
+      "value": 45,
+      "value_status": "extracted",
+      "value_qualifier": "exact",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-TC1",
+        "name": "Boost PME 2025"
+      },
+      "population": {
+        "target_group": [
+          "ENTREPRENEURS_BUSINESSES"
+        ],
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "start": "2025-09-03",
+        "end": "2025-09-05",
+        "reporting_year": 2025
+      },
+      "geography": {
+        "local_organization": {
+          "value": "JCI Bouaké Lumière",
+          "layer": "LOCAL_REPORTED_FACT"
+        },
+        "country_iso2": {
+          "value": "CI",
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "GEO-FROM-CITY",
+          "confidence": "H"
+        },
+        "geographic_area": {
+          "value": "AFME",
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "GEO-FROM-COUNTRY",
+          "confidence": "M"
+        }
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "document_id": "SUB-TC1",
+        "quote": "45 jeunes ont suivi le bootcamp de 3 jours",
+        "submitted_at": "2025-09-20T10:00:00Z",
+        "language": "fr"
+      },
+      "derivation": [
+        {
+          "step": "extract_number",
+          "rule_id": "EXTRACT-NUM",
+          "agent": "llm_extractor@v0",
+          "confidence": "H"
+        },
+        {
+          "step": "classify",
+          "rule_id": "MAP-METRIC",
+          "agent": "llm_classifier@v0",
+          "confidence": "H"
+        },
+        {
+          "step": "plausibility_check",
+          "rule_id": "CHK-PLAUSIBILITY",
+          "agent": "rules@v0",
+          "confidence": "H"
+        }
+      ],
+      "confidence": "H",
+      "verification_status": "validated",
+      "checks_passed": [
+        "CHK-UNIT",
+        "CHK-PLAUSIBILITY"
+      ],
+      "validated_by": "reviewer:NO-CI-01",
+      "validated_at": "2025-09-21T08:00:00Z",
+      "aggregation": {
+        "aggregable": true,
+        "equivalence_key": "PEOPLE_TRAINED|person|OUTPUT|direct|external|unique_persons|reporting_year|project",
+        "refusal_reason": null,
+        "dedup_key": "PRJ-TC1"
+      }
+    },
+    {
+      "_case": "Communication reach on the same project — aggregable with other COMM_AUDIENCE only; the pair with MO-TC1-TRAINED is refused by the engine (SEMANTIC_NON_EQUIVALENCE, stored in the refusal table) — D-14",
+      "measurement_id": "MO-TC1-REACH",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "COMM_AUDIENCE",
+      "metric_label_source": "portée Facebook du post de l'événement",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "standard": "PROPOSED_STANDARD:IAOOI-v0",
+        "rule_id": "MAP-METRIC",
+        "confidence": "M"
+      },
+      "value": 12000,
+      "value_status": "extracted",
+      "value_qualifier": "approx",
+      "unit": {
+        "code": "view",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-TC1",
+        "name": "Boost PME 2025"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "audience",
+        "dedup_basis": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "start": "2025-09-03",
+        "end": "2025-09-10",
+        "reporting_year": 2025
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "document_id": "SUB-TC1",
+        "quote": "le post a touché environ 12 000 personnes sur Facebook",
+        "language": "fr"
+      },
+      "verification_status": "reported",
+      "relations": [
+        {
+          "relation_type": "same_population_different_metric",
+          "measurement_id": "MO-TC1-TRAINED",
+          "note": "audience de communication, pas des bénéficiaires — jamais additionnée aux personnes formées"
+        }
+      ],
+      "aggregation": {
+        "aggregable": true,
+        "refusal_reason": null,
+        "equivalence_key": "COMM_AUDIENCE|view|OUTPUT|audience|external|unknown|reporting_year|project"
+      }
+    },
+    {
+      "_case": "Unreadable chart — null, never zero (rule P4 / VDX)",
+      "measurement_id": "MO-VDX-01",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "MEMBERS_BY_AREA",
+      "metric_label_source": "members per Area (chart)",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "CONTEXT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "M"
+      },
+      "value": null,
+      "value_status": "visual_data_not_extracted",
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "network",
+        "id": "JCI_GLOBAL"
+      },
+      "population": {
+        "internal_external": "internal",
+        "count_type": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "9",
+        "section": "Network",
+        "quote": "[chart: members per Area — values not legible in the text layer]"
+      },
+      "verification_status": "reported",
+      "dq_refs": [
+        "VDX-01"
+      ],
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "UNKNOWN_VALUE"
+      }
+    },
+    {
+      "_case": "Engine aggregate — calculated, coverage declared, never substituted for a published JCI total (AGG-4/AGG-5)",
+      "measurement_id": "MO-AGG-CI-TRAINED-2025",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "agrégat moteur — personnes formées, Côte d'Ivoire, 2025",
+      "definition": {
+        "status": "specified",
+        "text": "personnes ayant suivi une formation complète, déclarées par les OL contributrices"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "rule_id": "MAP-METRIC",
+        "confidence": "H"
+      },
+      "value": 128,
+      "value_status": "calculated",
+      "value_qualifier": "exact",
+      "formula": "sum(inputs)",
+      "inputs": [
+        "MO-TC1-TRAINED",
+        "MO-TC7-TRAINED",
+        "MO-TC9-TRAINED"
+      ],
+      "unit": {
+        "code": "person",
+        "dimension": "count"
+      },
+      "subject": {
+        "type": "organization",
+        "id": "NO-CI",
+        "name": "JCI Côte d'Ivoire"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct",
+        "dedup_basis": "unique_persons"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "SEMANTIC_INTERPRETATION",
+      "source": {
+        "origin": "engine"
+      },
+      "derivation": [
+        {
+          "step": "aggregate",
+          "rule_id": "AGG-1",
+          "agent": "rules@v0",
+          "input_refs": [
+            "MO-TC1-TRAINED",
+            "MO-TC7-TRAINED",
+            "MO-TC9-TRAINED"
+          ],
+          "confidence": "H"
+        }
+      ],
+      "confidence": "H",
+      "verification_status": "reported",
+      "parent_measurement_ids": [
+        "MO-TC1-TRAINED",
+        "MO-TC7-TRAINED",
+        "MO-TC9-TRAINED"
+      ],
+      "aggregation": {
+        "aggregable": true,
+        "equivalence_key": "PEOPLE_TRAINED|person|OUTPUT|direct|external|unique_persons|reporting_year|organization",
+        "coverage": {
+          "contributing_units": 3,
+          "total_units": 11,
+          "share": 0.27
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "_expected_failure": "P4 — unknown value forced to 0",
+      "measurement_id": "BAD-01",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "BENEFICIARIES",
+      "metric_label_source": "beneficiaries",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "confidence": "M"
+      },
+      "value": 0,
+      "value_status": "unknown",
+      "unit": {
+        "code": "person"
+      },
+      "subject": {
+        "type": "project",
+        "id": "X"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct"
+      },
+      "period": {
+        "type": "unknown"
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "non précisé"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "UNKNOWN_VALUE"
+      }
+    },
+    {
+      "_expected_failure": "P2 — a calculated value marked as an official JCI fact",
+      "measurement_id": "BAD-02",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "FOLLOWERS_TOTAL",
+      "metric_label_source": "total followers",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "CONTEXT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "confidence": "H"
+      },
+      "value": 229200,
+      "value_status": "calculated",
+      "formula": "148000+41000+32000+8200",
+      "inputs": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "unit": {
+        "code": "person"
+      },
+      "subject": {
+        "type": "network",
+        "id": "JCI_GLOBAL"
+      },
+      "population": {
+        "internal_external": "unknown",
+        "count_type": "audience"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "17",
+        "section": "Communications",
+        "quote": "followers"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "SEMANTIC_NON_EQUIVALENCE"
+      }
+    },
+    {
+      "_expected_failure": "T4/V11 — the engine cannot verify a JCI figure",
+      "measurement_id": "BAD-03",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "BENEFICIARIES",
+      "metric_label_source": "Total Number of Beneficiaries",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "confidence": "M"
+      },
+      "value": 21148414,
+      "value_status": "extracted",
+      "unit": {
+        "code": "person"
+      },
+      "subject": {
+        "type": "network",
+        "id": "JCI_GLOBAL"
+      },
+      "population": {
+        "internal_external": "mixed",
+        "count_type": "unknown"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "86",
+        "section": "Community Impact",
+        "quote": "21,148,414 Total Number of Beneficiaries"
+      },
+      "verification_status": "verified",
+      "evidence_refs": [
+        "EV-1"
+      ],
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "MISSING_COUNT_TYPE"
+      }
+    },
+    {
+      "_expected_failure": "DQC-12 — a percentage without a base population",
+      "measurement_id": "BAD-04",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "JOB_PLACEMENT",
+      "metric_label_source": "75% placed",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTCOME",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "confidence": "M"
+      },
+      "value": 75,
+      "value_status": "extracted",
+      "unit": {
+        "code": "percent",
+        "dimension": "share"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-X"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "OFFICIAL_JCI_FACT",
+      "source": {
+        "origin": "jci_report_2025",
+        "page": "91",
+        "section": "Community Impact",
+        "quote": "75% placed"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "MISSING_DEFINITION"
+      }
+    },
+    {
+      "_expected_failure": "a refusal with no stated reason",
+      "measurement_id": "BAD-05",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PARTICIPANTS",
+      "metric_label_source": "participants",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "confidence": "M"
+      },
+      "value": 30,
+      "value_status": "extracted",
+      "unit": {
+        "code": "person"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-Y"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission",
+        "quote": "une trentaine de jeunes"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": false
+      }
+    },
+    {
+      "_expected_failure": "P1 — a local fact with no citation",
+      "measurement_id": "BAD-06",
+      "standard": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1",
+      "metric_code": "PEOPLE_TRAINED",
+      "metric_label_source": "formés",
+      "definition": {
+        "status": "unknown",
+        "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+      },
+      "iaooi_class": {
+        "value": "OUTPUT",
+        "layer": "SEMANTIC_INTERPRETATION",
+        "confidence": "M"
+      },
+      "value": 60,
+      "value_status": "extracted",
+      "unit": {
+        "code": "person"
+      },
+      "subject": {
+        "type": "project",
+        "id": "PRJ-Z"
+      },
+      "population": {
+        "internal_external": "external",
+        "count_type": "direct"
+      },
+      "period": {
+        "type": "reporting_year",
+        "reporting_year": 2025
+      },
+      "layer": "LOCAL_REPORTED_FACT",
+      "source": {
+        "origin": "submission"
+      },
+      "verification_status": "reported",
+      "aggregation": {
+        "aggregable": false,
+        "refusal_reason": "MISSING_DEFINITION"
+      }
+    }
+  ]
+}

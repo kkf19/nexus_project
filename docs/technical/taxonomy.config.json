@@ -1,0 +1,854 @@
+{
+  "meta": {
+    "title": "NEXUS Taxonomy Configuration",
+    "version": "0.2.2",
+    "standard_version": "PROPOSED_STANDARD:NEXUS-TAXONOMY-v0",
+    "status": "ACCEPTED — trois axes indépendants (2026-09-18) ; v0.2.1 : input_type (D-10) ; v0.2.2 : target_group simplifié (D-19), statut des résultats (D-20), zone géographique issue du profil OL (D-18)",
+    "supersedes": "0.1.0-draft (structure hiérarchique L1→L8, où le programme était emboîté dans le domaine d'intervention)",
+    "derived_from": [
+      "Tier 1 §A (vocabulaire officiel JCI), §C (taxonomie), §P (modèle de provenance)",
+      "Tier 2 §F (inventaire des 465 indicateurs), §M (modèle d'entités observé)",
+      "DECISION NEXUS 2026-09-18 — pratique JCI de classement des projets (Product Owner, membre JCI)"
+    ],
+    "structural_principle": "JCI analyse un projet selon TROIS AXES INDÉPENDANTS : le domaine d'intervention (Area of Opportunity), le programme, et les ODD. Un même projet est classé sur chacun des trois, séparément. AUCUN de ces axes n'est emboîté dans un autre : un projet peut relever du domaine Individual Development, appartenir au programme JCI RISE, et viser l'ODD 8 — les trois en même temps, sans contradiction.",
+    "why_this_changed": "La version 0.1.0 rattachait chaque programme à un domaine d'intervention et faisait hériter le projet du domaine de son programme (ancienne règle R3). Cette structure était contredite par les chiffres publiés : page 85, 53,47 % des projets déclarés 2025 sont des projets RISE ; page 86, 44,64 % de ces mêmes projets relèvent de Community Impact. Un sous-ensemble ne peut pas excéder l'ensemble qui le contient. L'emboîtement était donc faux. Ce n'est PAS une incohérence du rapport JCI : c'était une erreur de modélisation NEXUS, désormais corrigée. Aucun objet de conflit (DQC) n'a été ouvert à ce sujet.",
+    "design_principle": "Les trois axes de classification sont OFFICIAL_JCI_FACT (JCI les publie). La couche de mesure (types d'activité, de groupe cible, de production, de résultat, d'impact) est PROPOSED_STANDARD : elle n'existe pas chez JCI, elle s'applique aux CHIFFRES et non au projet, et l'attribution d'un de ses codes à une donnée est toujours une SEMANTIC_INTERPRETATION.",
+    "prohibited": [
+      "Présenter un code de la couche de mesure comme du vocabulaire officiel JCI",
+      "Faire hériter le domaine d'intervention d'un projet depuis son programme",
+      "Utiliser la clé nue 'area' : toujours geographic_area ou area_of_opportunity"
+    ],
+    "changelog": [
+      {
+        "version": "0.2.0",
+        "change": "Restructuration en trois axes indépendants (D-07)"
+      },
+      {
+        "version": "0.2.1",
+        "change": "Ajout de measurement_layer.input_type : VOLUNTEERS, VOLUNTEER_HOURS (D-10). Codes déjà employés dans les fixtures Tier 1 et les exemples du Measurement Object, jusqu'ici absents du référentiel."
+      },
+      {
+        "version": "0.2.2",
+        "change": "D-19 : target_group réduit à 6 familles + OTHER (libellé libre conservé), jamais bloquant, hors clé d'équivalence ; table de correspondance depuis les 12 anciens codes. D-20 : measurement_layer.outcome_status (measured / pending_follow_up / none). D-18 : geographic_area déclarée dans le profil de l'OL à la création du compte."
+      }
+    ]
+  },
+  "classification_axes": {
+    "_note": "TROIS AXES INDÉPENDANTS. Un projet reçoit une valeur sur chacun, séparément. Aucun emboîtement.",
+    "area_of_opportunity": {
+      "axis": "A — Domaine d'intervention",
+      "layer_values": "OFFICIAL_JCI_FACT",
+      "layer_codes": "PROPOSED_STANDARD",
+      "source": "p.2, 24-25",
+      "cardinality": "1..n par projet",
+      "cardinality_evidence": "« Some projects may fall under 2 or more Area of Opportunity » [p.86]",
+      "published_distribution_2025": {
+        "CI": 0.4464,
+        "ID": 0.2721,
+        "BE": 0.1849,
+        "IC": 0.0966,
+        "_source": "p.86 — « 2025 Projects Reported per Area of Opportunity »",
+        "_note": "somme = 100,00 % : chaque projet compte une fois sur cet axe malgré la cardinalité 1..n"
+      },
+      "values": [
+        {
+          "code": "BE",
+          "label": "Business & Entrepreneurship",
+          "definition": "Programs fostering innovation, ethical business, and sustainable economic growth",
+          "typical_sdgs": [
+            8,
+            9,
+            12
+          ]
+        },
+        {
+          "code": "ID",
+          "label": "Individual Development",
+          "definition": "Skills, training, and experiences that build confidence and leadership capacity",
+          "typical_sdgs": [
+            4,
+            5,
+            10
+          ]
+        },
+        {
+          "code": "IC",
+          "label": "International Cooperation",
+          "definition": "Events, partnerships, and networks that connect young leaders across borders",
+          "typical_sdgs": [
+            16,
+            17
+          ]
+        },
+        {
+          "code": "CI",
+          "label": "Community Impact",
+          "definition": "Grassroots projects addressing real needs in local societies",
+          "typical_sdgs": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            8,
+            9,
+            11,
+            12,
+            13
+          ]
+        }
+      ],
+      "notes": [
+        "Aucun domaine « environnement » n'existe. Les projets environnementaux relèvent généralement de CI via les ODD 12/13 (SEMANTIC_INTERPRETATION).",
+        "Les ODD 6, 7, 14 et 15 ne sont associés par défaut à aucun domaine dans la source.",
+        "typical_sdgs est une association publiée p.24-25, PAS une règle de déduction automatique : les ODD d'un projet se déclarent sur l'axe C."
+      ]
+    },
+    "programme": {
+      "axis": "B — Programme",
+      "layer_names": "OFFICIAL_JCI_FACT",
+      "layer_codes": "PROPOSED_STANDARD",
+      "cardinality": "0..n par projet",
+      "cardinality_note": "Un projet local peut n'appartenir à aucun programme mondial. Le rapport oppose « RISE Projects » (53,47 %) à « Other Projects » (46,53 %) [p.85], ce qui atteste l'existence de projets hors programme.",
+      "independence_rule": "Le programme NE DÉTERMINE PAS le domaine d'intervention du projet. Les deux axes se déclarent séparément.",
+      "values": [
+        {
+          "code": "RISE",
+          "label": "JCI RISE",
+          "meaning": "Rebuild, Invest, Sustain, Evolve",
+          "launched": 2020,
+          "scope": "« addressing economic recovery, workforce empowerment, and mental health »",
+          "cross_cutting": true,
+          "components": "rise_pillars",
+          "declared_sdgs": {
+            "p26": [
+              1,
+              3,
+              8,
+              9,
+              11,
+              12,
+              16,
+              17
+            ],
+            "p85": [
+              3,
+              8,
+              10
+            ],
+            "conflict": "DQC-16 — UNRESOLVED, les deux jeux conservés"
+          },
+          "pages": [
+            85,
+            92
+          ],
+          "published_share_2025": 0.5347
+        },
+        {
+          "code": "CYE",
+          "label": "Creative Young Entrepreneur",
+          "subcomponents": [
+            "CYE Accelerator (SDSN Youth)"
+          ],
+          "declared_sdgs": [
+            8,
+            9,
+            12
+          ],
+          "pages": [
+            28,
+            115
+          ]
+        },
+        {
+          "code": "JIB",
+          "label": "JCI in Business",
+          "subcomponents": [
+            "International Business Matching Session"
+          ],
+          "pages": [
+            33
+          ]
+        },
+        {
+          "code": "SKILLS_DEV",
+          "label": "Skills Development (Trainer certification)",
+          "subcomponents": [
+            "CNT",
+            "CAT",
+            "Global Trainers",
+            "Training Mentors"
+          ],
+          "pages": [
+            40,
+            41
+          ]
+        },
+        {
+          "code": "EVENT_TRAINING",
+          "label": "Trainings at Area Conferences & World Congress",
+          "subcomponents": [
+            "Leadership Training Sessions",
+            "Skills Development Sessions"
+          ],
+          "pages": [
+            42
+          ]
+        },
+        {
+          "code": "LEAD_MASTERCLASS",
+          "label": "Leadership Masterclasses",
+          "declared_sdgs": [
+            4,
+            5,
+            10,
+            16,
+            17
+          ],
+          "pages": [
+            26
+          ]
+        },
+        {
+          "code": "PUBLIC_SPEAKING",
+          "label": "Public Speaking Competition",
+          "pages": [
+            43
+          ]
+        },
+        {
+          "code": "DEBATING",
+          "label": "Debating Championship",
+          "subcomponents": [
+            "EN",
+            "FR",
+            "ES"
+          ],
+          "pages": [
+            48
+          ]
+        },
+        {
+          "code": "TOYP",
+          "label": "Ten Outstanding Young Persons of the World",
+          "declared_sdgs": [
+            3,
+            4,
+            10,
+            11
+          ],
+          "label_variants_conflict": "DQC-20 — trois libellés différents dans la source",
+          "pages": [
+            26,
+            54
+          ]
+        },
+        {
+          "code": "EVENTS",
+          "label": "World Congress & Area Conferences",
+          "subcomponents": [
+            "4 Area Conferences",
+            "World Congress"
+          ],
+          "pages": [
+            59
+          ]
+        },
+        {
+          "code": "IHD",
+          "label": "International Human Duties Initiative",
+          "subcomponents": [
+            "7 Duties for Leaders",
+            "National Ambassadors",
+            "Best Human Duties Project Award"
+          ],
+          "pages": [
+            71
+          ]
+        },
+        {
+          "code": "TWINNING",
+          "label": "JCI Twinning",
+          "subcomponents": [
+            "Buddy Project",
+            "Mastery Month",
+            "Training for Innovation"
+          ],
+          "pages": [
+            78
+          ]
+        },
+        {
+          "code": "COMMUNITY_DEV",
+          "label": "Community Development Projects",
+          "pages": [
+            84
+          ]
+        },
+        {
+          "code": "SUST_LEADERSHIP_COURSE",
+          "label": "Mastering Sustainable Leadership (SDG Academy)",
+          "pages": [
+            124
+          ]
+        },
+        {
+          "code": "GLOBAL_CITIZEN_COURSE",
+          "label": "Becoming Global Citizens for a Sustainable Society",
+          "pages": [
+            125
+          ]
+        },
+        {
+          "code": "GYD",
+          "label": "Global Youth Dialogue",
+          "pages": [
+            122
+          ]
+        },
+        {
+          "code": "RISE_TO_THE_CHALLENGE",
+          "label": "RISE to the Challenge (ECOSOC Youth Forum side event)",
+          "pages": [
+            117,
+            118
+          ]
+        }
+      ],
+      "transversal_structures": {
+        "_note": "Structures JCI qui ne sont pas des programmes de projet et ne se déclarent pas sur cet axe.",
+        "layer": "OFFICIAL_JCI_FACT",
+        "items": [
+          "JCI Foundation / Development Grants",
+          "JCI Senate",
+          "JCI Awards Program",
+          "Club100",
+          "Alumni Clubs",
+          "Junior Clubs",
+          "Member-centric partnerships"
+        ],
+        "pages": [
+          12,
+          13,
+          96,
+          129
+        ]
+      },
+      "chapter_placement_in_report": {
+        "_warning": "STRUCTURE DOCUMENTAIRE UNIQUEMENT — ce n'est PAS une règle de classification. Indique seulement dans quel chapitre du rapport 2025 chaque programme a été imprimé. Ne jamais s'en servir pour déduire le domaine d'intervention d'un projet.",
+        "BE": [
+          "CYE",
+          "JIB"
+        ],
+        "ID": [
+          "SKILLS_DEV",
+          "EVENT_TRAINING",
+          "PUBLIC_SPEAKING",
+          "DEBATING"
+        ],
+        "IC": [
+          "TOYP",
+          "EVENTS",
+          "IHD",
+          "TWINNING"
+        ],
+        "CI": [
+          "COMMUNITY_DEV",
+          "RISE"
+        ],
+        "unplaced": [
+          "LEAD_MASTERCLASS",
+          "SUST_LEADERSHIP_COURSE",
+          "GLOBAL_CITIZEN_COURSE",
+          "GYD",
+          "RISE_TO_THE_CHALLENGE"
+        ]
+      }
+    },
+    "sdg": {
+      "axis": "C — Objectifs de Développement Durable",
+      "layer": "OFFICIAL_JCI_FACT",
+      "count": 17,
+      "source": "p.24-26, 84, 87-90",
+      "cardinality": "1..n par projet, dont exactement 1 principal",
+      "roles": [
+        "primary",
+        "secondary"
+      ],
+      "role_evidence": "« Primary SDGs Addressed / Secondary SDG » [p.84]",
+      "commitment_2026": "« Every local project will align with one or more SDGs and report measurable results » [p.132 — Road Map for 2026]",
+      "over_tagging_warning": "DQC-22 — le projet « SDGs Hunt » déclare les 17 ODD (l'ODD 11 deux fois) pour 4 heures de bénévolat et 5 bénévoles [p.89]. Un plafond sur le nombre d'ODD secondaires est un contrôle recommandé.",
+      "label_note": "Libellés courts de l'ONU tels qu'employés par JCI. La casse varie dans la source (« Zero hunger », « Gender equality ») : ne pas traiter une différence de casse comme une valeur distincte."
+    }
+  },
+  "rise_pillars": {
+    "_note": "Composante du programme RISE. Se déclare uniquement si le projet est RISE.",
+    "layer": "OFFICIAL_JCI_FACT",
+    "source": "p.85",
+    "cardinality": "1..n",
+    "canonical_label_set": "graphique « RISE Pillars Covered » — retenu par DECISION NEXUS parce que ce sont les libellés attachés aux pourcentages publiés",
+    "conflict": "DQC-17 — UNRESOLVED. La page 85 emploie deux jeux de libellés pour les mêmes trois piliers. NEXUS retient un jeu pour l'affichage ; cela ne résout pas le conflit côté JCI, qui reste ouvert.",
+    "values": [
+      {
+        "code": "REBUILD_ECONOMIES",
+        "label": "Sustaining and Rebuilding Economies",
+        "variant_label": "Sustain and Rebuild Economies",
+        "published_share_2025": 0.403
+      },
+      {
+        "code": "WORKFORCE",
+        "label": "Workforce Motivation",
+        "variant_label": "Workforce Empowerment",
+        "published_share_2025": 0.3167
+      },
+      {
+        "code": "MENTAL_HEALTH",
+        "label": "Preserving Mental Health",
+        "variant_label": "Mental Health Awareness",
+        "published_share_2025": 0.2804
+      }
+    ],
+    "arithmetic_note": "La somme des trois parts vaut 100,01 % (DQC-18, arrondi)."
+  },
+  "geographic_area": {
+    "_note": "Axe géographique, totalement distinct de area_of_opportunity malgré l'homonymie du mot « Area » dans la source.",
+    "layer": "OFFICIAL_JCI_FACT",
+    "source": "p.9",
+    "codes_are": "PROPOSED_STANDARD, sauf ASPAC (abréviation attestée p.81, 106, 128)",
+    "derivation": "Déclarée une fois dans le profil de l'OL à la création du compte (D-18) → LOCAL_REPORTED_FACT. Jamais extraite du texte, jamais demandée à la saisie d'un projet.",
+    "values": [
+      {
+        "code": "AFME",
+        "label": "Africa and the Middle East"
+      },
+      {
+        "code": "AMERICA",
+        "label": "America"
+      },
+      {
+        "code": "ASPAC",
+        "label": "Asia and the Pacific"
+      },
+      {
+        "code": "EUROPE",
+        "label": "Europe"
+      }
+    ],
+    "disambiguation": "Si une source emploie « Area » sans contexte suffisant pour trancher, marquer AMBIGUOUS_AREA. Jamais tranché par le LLM (règle P7).",
+    "known_gap": "La table organisation nationale / pays → geographic_area n'est pas publiée (VDX-01, carte p.9 illisible). Contournée pour le MVP par la déclaration du profil OL (D-18) ; la table reste utile pour contrôler la cohérence pays ↔ zone."
+  },
+  "measurement_layer": {
+    "_note": "PROPOSITION NEXUS. Ces codes ne sont PAS du vocabulaire JCI. Ils s'appliquent aux CHIFFRES d'un projet, pas au projet lui-même. Attribuer un de ces codes à une donnée est toujours une SEMANTIC_INTERPRETATION.",
+    "layer": "PROPOSED_STANDARD",
+    "input_type": {
+      "role": "Ressources mobilisées par le projet (classe IAOOI = INPUT). Jamais additionnées aux productions ni aux résultats : la clé d'équivalence les sépare.",
+      "mvp": "actif — alimente les champs canoniques #7 resources.volunteers et #8 resources.volunteer_hours",
+      "decision": "D-10 (2026-09-18)",
+      "values": [
+        {
+          "code": "VOLUNTEERS",
+          "unit": "person",
+          "iaooi_class": "INPUT",
+          "note": "La définition JCI de « volunteer » (membre ou non) est inconnue (UNK-DM-03) : definition.status reste unknown sauf si la saisie la précise."
+        },
+        {
+          "code": "VOLUNTEER_HOURS",
+          "unit": "hour",
+          "iaooi_class": "INPUT",
+          "note": "Total d'heures déclaré ; jamais recalculé à partir du nombre de bénévoles."
+        }
+      ]
+    },
+    "output_type": {
+      "role": "CRITIQUE — c'est ce champ qui alimente la clé d'équivalence et rend possible le refus d'agrégation. Sans lui, deux nombres de même unité sont indistinguables.",
+      "mvp": "actif, liste complète",
+      "values": [
+        {
+          "code": "PARTICIPANTS",
+          "unit": "person"
+        },
+        {
+          "code": "PEOPLE_TRAINED",
+          "unit": "person"
+        },
+        {
+          "code": "PEOPLE_REACHED_DIRECT",
+          "unit": "person"
+        },
+        {
+          "code": "PEOPLE_REACHED_OUTREACH",
+          "unit": "person",
+          "never_sum_with": [
+            "PEOPLE_REACHED_DIRECT",
+            "BENEFICIARIES"
+          ]
+        },
+        {
+          "code": "REGISTRATIONS",
+          "unit": "person"
+        },
+        {
+          "code": "ATTENDEES",
+          "unit": "person",
+          "never_sum_with": [
+            "REGISTRATIONS"
+          ],
+          "evidence": "DQC-06, DQC-14, DQC-15"
+        },
+        {
+          "code": "COMPLETIONS",
+          "unit": "person"
+        },
+        {
+          "code": "APPLICATIONS_ENTRIES",
+          "unit": "application"
+        },
+        {
+          "code": "TEAMS",
+          "unit": "team"
+        },
+        {
+          "code": "ITEMS_DISTRIBUTED",
+          "unit": "item"
+        },
+        {
+          "code": "SIGNATURES",
+          "unit": "signature"
+        },
+        {
+          "code": "AGREEMENTS_SIGNED",
+          "unit": "agreement"
+        },
+        {
+          "code": "DOCUMENTS_PRODUCED",
+          "unit": "document"
+        },
+        {
+          "code": "PHYSICAL_OUTPUT",
+          "unit": "variable",
+          "requires": "sub_code"
+        },
+        {
+          "code": "COMM_AUDIENCE",
+          "unit": "view",
+          "never_sum_with": [
+            "BENEFICIARIES",
+            "PEOPLE_REACHED_DIRECT"
+          ],
+          "evidence": "DQC-08"
+        }
+      ]
+    },
+    "outcome_type": {
+      "role": "CRITIQUE — seul emplacement où un résultat peut être rangé. JCI n'a aucune catégorie équivalente, ce qui explique que 12 seulement de ses 465 indicateurs décrivent un changement.",
+      "mvp": "actif, liste complète",
+      "values": [
+        {
+          "code": "JOBS_CREATED"
+        },
+        {
+          "code": "JOB_PLACEMENT",
+          "requires": "base_population",
+          "evidence": "DQC-12 — « 75% placed » sans base [p.91]"
+        },
+        {
+          "code": "BUSINESS_CREATED"
+        },
+        {
+          "code": "BUSINESS_GROWTH"
+        },
+        {
+          "code": "ACCESS_TO_FINANCE_MARKETS"
+        },
+        {
+          "code": "SKILLS_CONFIDENCE"
+        },
+        {
+          "code": "AWARENESS_ATTITUDE"
+        },
+        {
+          "code": "POLICY_INSTITUTIONAL_CHANGE"
+        },
+        {
+          "code": "FOLLOW_UP_INITIATIVES"
+        },
+        {
+          "code": "NEW_MEMBERS",
+          "note": "résultat organisationnel, pas communautaire"
+        },
+        {
+          "code": "PARTNERSHIPS_FORMED"
+        }
+      ]
+    },
+    "target_group": {
+      "role": "Décrire à qui s'adresse le projet, pour lecture et filtrage. N'intervient JAMAIS dans l'agrégation.",
+      "decision": "D-19 (2026-09-18) — il est impossible de prévoir tous les publics qu'une OL peut décrire ; la liste est donc courte, ouverte (OTHER) et non bloquante.",
+      "layer": "PROPOSED_STANDARD (codes) · SEMANTIC_INTERPRETATION (attribution par l'IA)",
+      "structure": {
+        "internal_external": {
+          "required": true,
+          "values": [
+            "internal",
+            "external",
+            "mixed"
+          ],
+          "rule": "Seule partie obligatoire (confirmation humaine, D-16). Porte la règle R7 et entre dans la clé d'équivalence."
+        },
+        "family": {
+          "required": false,
+          "proposed_by": "IA",
+          "blocking": false,
+          "cardinality": "0..n",
+          "in_equivalence_key": false
+        },
+        "source_label": {
+          "required": false,
+          "rule": "Libellé exact employé par le SG (ex. « chercheurs d'emploi »), toujours conservé tel quel, jamais reformulé."
+        }
+      },
+      "values": [
+        {
+          "code": "JCI_MEMBERS",
+          "label": "Membres JCI",
+          "axis": "internal"
+        },
+        {
+          "code": "YOUTH_STUDENTS",
+          "label": "Jeunes, étudiants, enfants",
+          "axis": "external"
+        },
+        {
+          "code": "ENTREPRENEURS_BUSINESSES",
+          "label": "Entrepreneurs et entreprises",
+          "axis": "external"
+        },
+        {
+          "code": "EMPLOYMENT_PROFESSIONALS",
+          "label": "Emploi et professionnels (dont chercheurs d'emploi)",
+          "axis": "external"
+        },
+        {
+          "code": "COMMUNITY_PUBLIC",
+          "label": "Communauté et grand public (dont publics vulnérables)",
+          "axis": "external"
+        },
+        {
+          "code": "INSTITUTIONS_DECISION_MAKERS",
+          "label": "Institutions et décideurs",
+          "axis": "external"
+        },
+        {
+          "code": "OTHER",
+          "label": "Autre — le libellé libre du SG fait foi",
+          "axis": "any",
+          "requires": "source_label"
+        }
+      ],
+      "fallback_rule": "Si aucune famille ne convient ou si l'IA hésite : OTHER + source_label. Ce n'est jamais une erreur ni un blocage.",
+      "legacy_mapping_v0_2_1": {
+        "JCI_MEMBERS": "JCI_MEMBERS",
+        "JCI_JUNIOR": "JCI_MEMBERS",
+        "YOUTH": "YOUTH_STUDENTS",
+        "STUDENTS": "YOUTH_STUDENTS",
+        "CHILDREN": "YOUTH_STUDENTS",
+        "ENTREPRENEURS": "ENTREPRENEURS_BUSINESSES",
+        "WOMEN_ENTREPRENEURS": "ENTREPRENEURS_BUSINESSES",
+        "SMES_BUSINESSES": "ENTREPRENEURS_BUSINESSES",
+        "PROFESSIONALS": "EMPLOYMENT_PROFESSIONALS",
+        "VULNERABLE_COMMUNITIES": "COMMUNITY_PUBLIC",
+        "GENERAL_PUBLIC": "COMMUNITY_PUBLIC",
+        "DECISION_MAKERS": "INSTITUTIONS_DECISION_MAKERS"
+      },
+      "attributes_not_groups": [
+        "gender",
+        "age_band",
+        "rural_urban",
+        "vulnerability_flag"
+      ],
+      "critical_rule": "R7 — les membres JCI (interne) et les communautés externes ne s'additionnent jamais. Défaut documenté : S6."
+    },
+    "activity_type": {
+      "role": "Utile pour comparer des projets entre eux, non vital pour l'agrégation.",
+      "mvp": "déduit par l'IA, aucune liste imposée à la saisie, aucune question au SG",
+      "values": [
+        {
+          "code": "TRAINING_WORKSHOP",
+          "label": "Formation / atelier"
+        },
+        {
+          "code": "MENTORING",
+          "label": "Mentorat"
+        },
+        {
+          "code": "COMPETITION",
+          "label": "Compétition / concours"
+        },
+        {
+          "code": "RECOGNITION_AWARD",
+          "label": "Distinction / prix"
+        },
+        {
+          "code": "CONFERENCE_EVENT",
+          "label": "Congrès / conférence"
+        },
+        {
+          "code": "PANEL_FORUM_DIALOGUE",
+          "label": "Panel / forum / dialogue"
+        },
+        {
+          "code": "ADVOCACY_CAMPAIGN",
+          "label": "Plaidoyer / pétition / proclamation"
+        },
+        {
+          "code": "AWARENESS_EDUCATION",
+          "label": "Sensibilisation / éducation du public"
+        },
+        {
+          "code": "COMMUNITY_SERVICE",
+          "label": "Service direct"
+        },
+        {
+          "code": "ENVIRONMENTAL_ACTION",
+          "label": "Action environnementale"
+        },
+        {
+          "code": "NETWORKING_MATCHING",
+          "label": "Réseautage / mise en relation"
+        },
+        {
+          "code": "PARTNERSHIP_AGREEMENT",
+          "label": "Accord / jumelage"
+        },
+        {
+          "code": "FUNDRAISING",
+          "label": "Collecte de fonds"
+        },
+        {
+          "code": "ONLINE_COURSE_WEBINAR",
+          "label": "Cours / webinaire en ligne"
+        },
+        {
+          "code": "INTERNAL_GOVERNANCE",
+          "label": "Structuration interne"
+        }
+      ]
+    },
+    "impact_type": {
+      "role": "Type une AFFIRMATION d'impact, jamais une mesure. Aucun impact n'est mesuré avec attribution dans le rapport (constat S3).",
+      "mvp": "DÉSACTIVÉ — 1 seul cas sur 465 indicateurs, volume négligeable pour la démonstration",
+      "values": [
+        {
+          "code": "ENVIRONMENTAL"
+        },
+        {
+          "code": "ECONOMIC_RESILIENCE"
+        },
+        {
+          "code": "HEALTH_WELLBEING"
+        },
+        {
+          "code": "EDUCATION_ACCESS"
+        },
+        {
+          "code": "SOCIAL_INCLUSION_EQUITY"
+        },
+        {
+          "code": "GOVERNANCE_PEACE"
+        }
+      ],
+      "attribution_levels": [
+        "measured_attribution",
+        "measured_contribution",
+        "self_reported",
+        "narrative_only"
+      ]
+    },
+    "outcome_status": {
+      "role": "État du champ canonique #12 (résultats) pour un projet. Remplace le booléen none_measured.",
+      "decision": "D-20 (2026-09-18)",
+      "layer": "PROPOSED_STANDARD",
+      "required": true,
+      "values": [
+        {
+          "code": "measured",
+          "label": "Résultat constaté",
+          "rule": "Le SG déclare ≥1 résultat concret chiffré (réponse à C7). La mesure garde sa propre iaooi_class (ex. 43 CV refaits = OUTPUT) : le statut dit qu'un résultat a été déclaré, il ne reclasse rien."
+        },
+        {
+          "code": "pending_follow_up",
+          "label": "Pas encore mesurable — suivi prévu",
+          "rule": "Requiert expected_outcome_type (ou libellé libre) + follow_up_date. Aucune mesure créée, aucune valeur 0. La réponse au suivi crée une NOUVELLE mesure rattachée au projet."
+        },
+        {
+          "code": "none",
+          "label": "Aucun résultat mesurable attendu",
+          "rule": "Activité réelle (comptée via ses outputs et inputs) sans effet mesurable visé, ex. partage d'expérience. Aucune mesure créée."
+        }
+      ],
+      "mvp": "Les trois états sont stockés et affichés. La relance automatique à follow_up_date est post-MVP (démo : suivi simulé).",
+      "invariant": "UNKNOWN ≠ ZERO : ni pending_follow_up ni none ne produisent de valeur 0."
+    }
+  },
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "Un projet appartient à 1 organisation locale (ou 1 organisation nationale pour un projet national) ; une OL relève de 1 NO ; une NO relève de 1 geographic_area.",
+      "layer": "OFFICIAL_JCI_FACT (structure p.8-10)"
+    },
+    {
+      "id": "R2",
+      "rule": "Un projet porte 1..n area_of_opportunity.",
+      "layer": "OFFICIAL_JCI_FACT p.86"
+    },
+    {
+      "id": "R3",
+      "rule": "Les trois axes de classification sont INDÉPENDANTS. Le domaine d'intervention d'un projet ne se déduit jamais de son programme, ni l'inverse. Chaque axe se déclare séparément.",
+      "layer": "DECISION NEXUS 2026-09-18",
+      "supersedes": "R3 v0.1.0, qui faisait hériter le domaine depuis le programme — structure démentie par les distributions publiées p.85 et p.86"
+    },
+    {
+      "id": "R4",
+      "rule": "Un projet RISE porte 1..n piliers RISE. Un projet non-RISE n'en porte aucun.",
+      "layer": "SEMANTIC_INTERPRETATION (le % par pilier suppose un étiquetage existant côté JCI)"
+    },
+    {
+      "id": "R5",
+      "rule": "ODD : exactement 1 principal, n secondaires.",
+      "layer": "SEMANTIC_INTERPRETATION, libellés de rôle attestés p.84"
+    },
+    {
+      "id": "R6",
+      "rule": "Un jumelage relie ≥2 organisations de pays différents ; un même projet peut être déclaré par chaque partie.",
+      "layer": "OFFICIAL_JCI_FACT p.78",
+      "mvp_status": "DÉSACTIVÉ — décision D-03 : la déduplication est hors périmètre MVP, un projet déclaré deux fois est compté deux fois"
+    },
+    {
+      "id": "R7",
+      "rule": "Les métriques de membres JCI (interne) et de bénéficiaires externes ne s'additionnent jamais.",
+      "layer": "PROPOSED_STANDARD",
+      "evidence": "constat S6"
+    },
+    {
+      "id": "R8",
+      "rule": "Les métriques de contexte et les chiffres d'événements externes ne sont jamais agrégés comme productions NEXUS.",
+      "layer": "PROPOSED_STANDARD",
+      "evidence": "DQC-21"
+    },
+    {
+      "id": "R9",
+      "rule": "Un projet peut n'appartenir à aucun programme. L'absence de programme est une valeur légitime, pas une donnée manquante.",
+      "layer": "OFFICIAL_JCI_FACT",
+      "evidence": "« Other Projects 46.53% » [p.85]"
+    }
+  ],
+  "cross_axis_analysis_enabled": {
+    "_note": "Ce que la structure à trois axes rend possible et que le rapport JCI 2025 ne permet pas.",
+    "examples": [
+      "Comparer les résultats des projets RISE et non-RISE, à domaine d'intervention égal",
+      "Mesurer la contribution réelle de chaque pilier RISE, au-delà du simple pourcentage de projets étiquetés",
+      "Croiser un ODD avec un domaine d'intervention et un programme sans double comptage",
+      "Répondre à « le programme RISE produit-il davantage ? », question aujourd'hui sans réponse dans la source"
+    ]
+  }
+}

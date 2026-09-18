@@ -1,0 +1,480 @@
+{
+  "meta": {
+    "title": "Tier 2 H — lineage examples",
+    "rule": "No unsupported inference becomes an official JCI fact."
+  },
+  "documented_lineage_volunteers": {
+    "lineage_id": "LIN-DOC-VOLUNTEERS",
+    "description": "Documented lineage of the volunteers metric, as far as the JCI report allows",
+    "metric": {
+      "normalized_name": {
+        "value": "input.volunteers_engaged.total",
+        "layer": "PROPOSED_STANDARD",
+        "standard": "PROPOSED_STANDARD:JCI-INDICATOR-v0"
+      }
+    },
+    "chain": [
+      {
+        "level": "global_metric",
+        "node": "JCI network",
+        "value": {
+          "value": 42401,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": "person",
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "86",
+            "section": "JCI RISE Projects",
+            "quote": "42,401 Total Number of Volunteers Engaged"
+          }
+        },
+        "conflict_refs": [
+          "DQC-05"
+        ]
+      },
+      {
+        "level": "geographic_area",
+        "node": "per geographic_area",
+        "value": {
+          "value": null,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "unknown",
+          "reason": "volunteers are not broken down by geographic_area (only project shares are, p. 86)",
+          "source": {
+            "origin": "jci_report_2025",
+            "searched_scope": "p. 84–86"
+          }
+        },
+        "link_status": "BROKEN"
+      },
+      {
+        "level": "country / national_organization",
+        "node": "per NO",
+        "value": {
+          "value": null,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "unknown",
+          "reason": "no breakdown by country or NO",
+          "source": {
+            "origin": "jci_report_2025",
+            "searched_scope": "full text"
+          }
+        },
+        "link_status": "BROKEN"
+      },
+      {
+        "level": "local_organization",
+        "node": "JCI Mahajanga",
+        "value": {
+          "value": "JCI Mahajanga",
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": null,
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "87",
+            "section": "Community Impact Stories",
+            "quote": "organized by JCI Mahajanga"
+          }
+        },
+        "link_status": "ISOLATED_LEAF (cannot be connected to the global total: only 4 project leaves are published)"
+      },
+      {
+        "level": "project",
+        "node": "MED'PRENEUR",
+        "value": {
+          "value": 15,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": "person",
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "87",
+            "section": "Community Impact Stories",
+            "quote": "and 15 volunteers engaged"
+          }
+        }
+      },
+      {
+        "level": "source_document",
+        "node": "project submission",
+        "value": {
+          "value": "submission",
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": null,
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "87",
+            "section": "Community Impact Stories",
+            "quote": "The submission describes the challenge and community context as follows"
+          }
+        },
+        "note": "the submission itself is not available"
+      },
+      {
+        "level": "raw_data",
+        "node": "raw submission text",
+        "value": {
+          "value": null,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "unknown",
+          "reason": "raw submission not published",
+          "source": {
+            "origin": "jci_report_2025",
+            "searched_scope": "full text"
+          }
+        }
+      },
+      {
+        "level": "transformation",
+        "node": "JCI → report",
+        "value": {
+          "value": null,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "unknown",
+          "reason": "no aggregation method, deduplication or validation described",
+          "source": {
+            "origin": "jci_report_2025",
+            "searched_scope": "full text"
+          }
+        }
+      },
+      {
+        "level": "final_value",
+        "node": "published value",
+        "value": {
+          "value": 15,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": "person",
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "87",
+            "section": "Community Impact Stories",
+            "quote": "Measurable outcomes included 244 volunteer hours, and 15 volunteers engaged"
+          }
+        },
+        "normalization": {
+          "metric_code": {
+            "value": "VOLUNTEERS",
+            "layer": "PROPOSED_STANDARD",
+            "standard": "PROPOSED_STANDARD:JCI-NORM-v0"
+          },
+          "iaooi_class": {
+            "value": "INPUT",
+            "layer": "PROPOSED_STANDARD",
+            "standard": "PROPOSED_STANDARD:IAOOI-v0"
+          },
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "MAP-METRIC",
+          "basis": "people giving time = resource, although the report labels it 'Measurable outcomes'"
+        }
+      }
+    ],
+    "reconstructible": {
+      "value": false,
+      "layer": "SEMANTIC_INTERPRETATION",
+      "rule_id": "LINEAGE-CHECK",
+      "basis": "3 of 9 levels unknown; the published leaves (15 + 25 + 5 + 17 = 62 volunteers, p. 87–90) cover 0.15% of 42,401",
+      "confidence": "H"
+    },
+    "leaves_sum": {
+      "value": 62,
+      "layer": "SEMANTIC_INTERPRETATION",
+      "value_status": "calculated",
+      "formula": "15 + 25 + 5 + 17",
+      "inputs": [
+        {
+          "origin": "jci_report_2025",
+          "document": "JCI Impact Report 2025",
+          "page": "87",
+          "section": "Community Impact Stories",
+          "quote": "15 volunteers engaged"
+        },
+        {
+          "origin": "jci_report_2025",
+          "document": "JCI Impact Report 2025",
+          "page": "88",
+          "section": "Community Impact Stories",
+          "quote": "25 volunteers engaged"
+        },
+        {
+          "origin": "jci_report_2025",
+          "document": "JCI Impact Report 2025",
+          "page": "89",
+          "section": "Community Impact Stories",
+          "quote": "5 volunteers engaged"
+        },
+        {
+          "origin": "jci_report_2025",
+          "document": "JCI Impact Report 2025",
+          "page": "90",
+          "section": "Community Impact Stories",
+          "quote": "17 volunteers engaged"
+        }
+      ],
+      "rule_id": "CALC-ARITH",
+      "confidence": "H"
+    }
+  },
+  "documented_lineage_members": {
+    "lineage_id": "LIN-DOC-MEMBERS",
+    "description": "Best-documented lineage in the report: members (global → geographic_area), then broken",
+    "chain": [
+      {
+        "level": "global_metric",
+        "value": {
+          "value": 147670,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": "person",
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "8",
+            "section": "Membership Details",
+            "quote": "powered by 147,670 members"
+          }
+        },
+        "conflict_refs": [
+          "DQC-01"
+        ]
+      },
+      {
+        "level": "geographic_area",
+        "node": "Asia and the Pacific",
+        "value": {
+          "value": 103170,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": "person",
+          "fact_scope": "statement_published",
+          "verification_status": "reported",
+          "source": {
+            "origin": "jci_report_2025",
+            "document": "JCI Impact Report 2025",
+            "page": "8",
+            "section": "Membership Details",
+            "quote": "Asia & the Pacific 103,170 69.9% 2,945 63.5%"
+          }
+        },
+        "check": {
+          "value": true,
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "CALC-SUM-CHECK",
+          "basis": "sum of the 4 Areas = 147,670",
+          "confidence": "H"
+        }
+      },
+      {
+        "level": "country / national_organization",
+        "value": {
+          "value": null,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "unknown",
+          "reason": "members per NO not published",
+          "source": {
+            "origin": "jci_report_2025",
+            "searched_scope": "full text"
+          }
+        },
+        "link_status": "BROKEN"
+      },
+      {
+        "level": "local_organization",
+        "value": {
+          "value": null,
+          "layer": "OFFICIAL_JCI_FACT",
+          "value_status": "unknown",
+          "reason": "members per LO not published",
+          "source": {
+            "origin": "jci_report_2025",
+            "searched_scope": "full text"
+          }
+        },
+        "link_status": "BROKEN"
+      }
+    ]
+  },
+  "proposed_lineage_tc1": {
+    "lineage_id": "LIN-PROP-TC1-HOURS",
+    "fictional": true,
+    "standard": {
+      "value": "lineage model",
+      "layer": "PROPOSED_STANDARD",
+      "standard": "PROPOSED_STANDARD:LINEAGE-v0"
+    },
+    "description": "Proposed complete lineage, bottom-up, for volunteer hours of fictional project TC1 (Boost PME 2025)",
+    "chain_bottom_up": [
+      {
+        "level": "raw_data",
+        "node": "submission TC1 free text",
+        "value": {
+          "value": "environ 150 heures au total",
+          "layer": "LOCAL_REPORTED_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "exact",
+          "unit": null,
+          "verification_status": "reported",
+          "source": {
+            "origin": "local_submission",
+            "submission_id": "TC1",
+            "quote": "environ 150 heures au total"
+          }
+        },
+        "captured_at": "2025-09-20T10:14:00Z"
+      },
+      {
+        "level": "source_document",
+        "node": "submission TC1",
+        "value": {
+          "value": "TC1",
+          "layer": "PROPOSED_STANDARD",
+          "standard": "PROPOSED_STANDARD:ID-SCHEME-v0"
+        },
+        "document_hash": "sha256:<computed at ingestion>"
+      },
+      {
+        "level": "transformation",
+        "steps": [
+          {
+            "step": 1,
+            "op": "extract_number",
+            "layer": "SEMANTIC_INTERPRETATION",
+            "rule_id": "EXTRACT-NUM",
+            "basis": "'environ 150' → 150, qualifier approx",
+            "confidence": "H",
+            "actor": "llm_extractor@v0"
+          },
+          {
+            "step": 2,
+            "op": "unit_normalize",
+            "layer": "SEMANTIC_INTERPRETATION",
+            "rule_id": "UNIT-HOUR",
+            "basis": "'heures' → hour",
+            "confidence": "H",
+            "actor": "rules@v0"
+          },
+          {
+            "step": 3,
+            "op": "classify",
+            "layer": "SEMANTIC_INTERPRETATION",
+            "rule_id": "MAP-METRIC",
+            "basis": "VOLUNTEER_HOURS / INPUT",
+            "confidence": "H",
+            "actor": "llm_classifier@v0"
+          },
+          {
+            "step": 4,
+            "op": "plausibility_check",
+            "layer": "SEMANTIC_INTERPRETATION",
+            "rule_id": "CHK-HOURS-PER-VOLUNTEER",
+            "basis": "150 h / 12 volunteers = 12.5 h over 3 days: plausible",
+            "confidence": "M",
+            "actor": "rules@v0"
+          },
+          {
+            "step": 5,
+            "op": "human_validation",
+            "layer": "SEMANTIC_INTERPRETATION",
+            "rule_id": "HV-REVIEW",
+            "basis": "reviewer confirms value against attendance list",
+            "confidence": "H",
+            "validated_by": "reviewer:<id>",
+            "validated_at": "2025-09-22T08:00:00Z"
+          }
+        ]
+      },
+      {
+        "level": "final_value",
+        "node": "TC1 · VOLUNTEER_HOURS",
+        "value": {
+          "value": 150,
+          "layer": "LOCAL_REPORTED_FACT",
+          "value_status": "extracted",
+          "value_qualifier": "approx",
+          "unit": "hour",
+          "verification_status": "validated",
+          "source": {
+            "origin": "local_submission",
+            "submission_id": "TC1",
+            "quote": "environ 150 heures au total"
+          }
+        }
+      },
+      {
+        "level": "project",
+        "node": "Boost PME 2025"
+      },
+      {
+        "level": "local_organization",
+        "node": "JCI Bouaké Lumière (fictional)"
+      },
+      {
+        "level": "country",
+        "node": {
+          "value": "Côte d'Ivoire",
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "GEO-FROM-CITY",
+          "basis": "Bouaké",
+          "confidence": "H"
+        }
+      },
+      {
+        "level": "geographic_area",
+        "node": {
+          "value": "Africa and the Middle East",
+          "layer": "SEMANTIC_INTERPRETATION",
+          "rule_id": "GEO-FROM-COUNTRY",
+          "basis": "lookup table to be supplied by JCI (VDX-01)",
+          "confidence": "M"
+        }
+      },
+      {
+        "level": "global_metric",
+        "node": "input.volunteer_hours.total (engine aggregate)",
+        "value": {
+          "value": null,
+          "layer": "SEMANTIC_INTERPRETATION",
+          "value_status": "unknown",
+          "reason": "aggregate over all projects — not computed in this example",
+          "rule_id": "AGG-SUM",
+          "basis": "sum of project values with same period and definition"
+        },
+        "aggregation_rules": [
+          "AGG-1: only values with the same metric definition and period are summed",
+          "AGG-2: verification_status of the aggregate = weakest input (reported < validated < verified)",
+          "AGG-3: value_qualifier of the aggregate = approx if any input is approx",
+          "AGG-4: the aggregate stores coverage = share of projects contributing",
+          "AGG-5: an engine aggregate is never compared to a JCI published total without citing both (e.g. DQC-05)"
+        ]
+      }
+    ]
+  }
+}

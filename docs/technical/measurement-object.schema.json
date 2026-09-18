@@ -1,0 +1,1182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nexus.jci/schemas/measurement-object-v1.json",
+  "title": "NEXUS Measurement Object v1",
+  "description": "Atomic measurement record. One number (or one explicit absence of a number), about one population, in one unit, over one period, produced one way, as stated by one source. Standard: PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1. Derived from Tier 1 (provenance model P0-P14, IAOOI-v0, taxonomy C) and Tier 2 (indicator inventory F, collection model G, quality & lineage H).",
+  "type": "object",
+  "required": [
+    "measurement_id",
+    "standard",
+    "metric_code",
+    "metric_label_source",
+    "definition",
+    "iaooi_class",
+    "value",
+    "value_status",
+    "unit",
+    "subject",
+    "population",
+    "period",
+    "layer",
+    "source",
+    "verification_status",
+    "aggregation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "measurement_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "standard": {
+      "const": "PROPOSED_STANDARD:MEASUREMENT-OBJECT-v1"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metric_code": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Code from taxonomy.config.json (L5 output / L6 outcome / L7 impact) or metric vocabulary. The CODE is PROPOSED_STANDARD; attaching it to this measurement is SEMANTIC_INTERPRETATION. Never OFFICIAL_JCI_FACT (rule P5)."
+    },
+    "metric_label_source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The exact wording used by the source. Never reformulated."
+    },
+    "definition": {
+      "type": "object",
+      "required": [
+        "status",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "specified",
+            "unknown"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "layer": {
+          "$ref": "#/definitions/layer"
+        },
+        "source_ref": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "text": {
+                "const": "NOT SPECIFIED IN THE SOURCE DOCUMENT"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "iaooi_class": {
+      "type": "object",
+      "required": [
+        "value",
+        "layer",
+        "confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "enum": [
+            "INPUT",
+            "ACTIVITY",
+            "OUTPUT",
+            "OUTCOME",
+            "IMPACT_CLAIM",
+            "CONTEXT",
+            "UNCERTAIN"
+          ]
+        },
+        "layer": {
+          "const": "SEMANTIC_INTERPRETATION"
+        },
+        "standard": {
+          "const": "PROPOSED_STANDARD:IAOOI-v0"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    },
+    "source_wording_class": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "How the SOURCE classified it, e.g. 'Measurable outcomes'. Lets the system say: the document calls it X, NEXUS classifies it Y."
+    },
+    "taxonomy_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "area_of_opportunity": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "BE",
+              "ID",
+              "IC",
+              "CI"
+            ]
+          }
+        },
+        "programme": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Axe B de la taxonomie v0.2 — cardinalite 0..n. Un tableau vide signifie 'aucun programme', ce qui est une valeur legitime (regle R9), pas une donnee manquante. N'induit JAMAIS area_of_opportunity (regle R3)."
+        },
+        "rise_pillars": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "activity_type": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target_group": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sdgs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "goal"
+            ],
+            "properties": {
+              "goal": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 17
+              },
+              "role": {
+                "enum": [
+                  "primary",
+                  "secondary",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        "layer": {
+          "const": "SEMANTIC_INTERPRETATION"
+        }
+      }
+    },
+    "value": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "value_status": {
+      "enum": [
+        "extracted",
+        "calculated",
+        "estimated",
+        "unknown",
+        "visual_data_not_extracted",
+        "conflicting"
+      ]
+    },
+    "value_qualifier": {
+      "enum": [
+        "exact",
+        "approx",
+        "at_least",
+        "at_most",
+        "range"
+      ]
+    },
+    "value_range": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "examples": [
+            "person",
+            "hour",
+            "item",
+            "kg",
+            "t",
+            "kW",
+            "signature",
+            "agreement",
+            "document",
+            "percent",
+            "ratio",
+            "currency",
+            "view",
+            "tree",
+            "team",
+            "application"
+          ]
+        },
+        "dimension": {
+          "enum": [
+            "count",
+            "duration",
+            "mass",
+            "energy",
+            "money",
+            "share",
+            "other"
+          ]
+        },
+        "currency_code": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "sub_code": {
+          "type": "string"
+        }
+      }
+    },
+    "unit_normalization": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "rule_id"
+      ],
+      "properties": {
+        "original_unit": {
+          "type": "string"
+        },
+        "original_value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "rate_date": {
+          "type": "string"
+        },
+        "layer": {
+          "const": "SEMANTIC_INTERPRETATION"
+        }
+      }
+    },
+    "formula": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "method": {
+      "type": "string"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "conflicting_values": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": [
+          "value",
+          "source"
+        ],
+        "properties": {
+          "value": {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          "source": {
+            "type": "object"
+          }
+        }
+      },
+      "description": "Rule P8: ALL conflicting values are kept, none is chosen."
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "project",
+            "organization",
+            "event",
+            "program",
+            "network"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "population": {
+      "type": "object",
+      "required": [
+        "internal_external",
+        "count_type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "target_group": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "internal_external": {
+          "enum": [
+            "internal",
+            "external",
+            "mixed",
+            "unknown"
+          ],
+          "description": "JCI members vs external communities. Rule R7: never summed together."
+        },
+        "count_type": {
+          "enum": [
+            "direct",
+            "indirect",
+            "audience",
+            "unique",
+            "cumulative",
+            "unknown"
+          ],
+          "description": "Without this, no 'beneficiaries' total is meaningful (T2-4)."
+        },
+        "dedup_basis": {
+          "enum": [
+            "unique_persons",
+            "attendances",
+            "households",
+            "unknown"
+          ]
+        },
+        "base_population": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "definition": {
+              "type": "string"
+            },
+            "layer": {
+              "$ref": "#/definitions/layer"
+            }
+          },
+          "description": "Mandatory when unit is percent or ratio (DQC-12, DQC-13)."
+        },
+        "attributes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "gender_share": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "age_band": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rural_urban": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "period": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "point_in_time",
+            "range",
+            "reporting_year",
+            "unknown"
+          ]
+        },
+        "start": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "end": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reporting_year": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "description": "Mandatory: the report mixes 6 different reporting periods (DQC-24)."
+    },
+    "geography": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "local_organization": {
+          "$ref": "#/definitions/geoLevel"
+        },
+        "national_organization": {
+          "$ref": "#/definitions/geoLevel"
+        },
+        "country_iso2": {
+          "$ref": "#/definitions/geoLevel"
+        },
+        "geographic_area": {
+          "$ref": "#/definitions/geoLevel"
+        }
+      },
+      "description": "Rule P7: never a bare 'area' key."
+    },
+    "layer": {
+      "$ref": "#/definitions/layer"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "origin"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "examples": [
+            "jci_report_2025",
+            "submission",
+            "engine"
+          ]
+        },
+        "document_id": {
+          "type": "string"
+        },
+        "page": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string"
+        },
+        "quote": {
+          "type": "string"
+        },
+        "span": {
+          "type": "object"
+        },
+        "submitted_at": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        }
+      }
+    },
+    "derivation": {
+      "type": "array",
+      "description": "Ordered transformation steps = LINEAGE-v0 carried by the object itself.",
+      "items": {
+        "type": "object",
+        "required": [
+          "step",
+          "agent"
+        ],
+        "properties": {
+          "step": {
+            "type": "string",
+            "examples": [
+              "extract_number",
+              "unit_normalize",
+              "classify",
+              "plausibility_check",
+              "human_validation",
+              "aggregate"
+            ]
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string",
+            "examples": [
+              "llm_extractor@v0",
+              "llm_classifier@v0",
+              "rules@v0",
+              "reviewer:<id>"
+            ]
+          },
+          "input_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "$ref": "#/definitions/confidence"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "confidence": {
+      "$ref": "#/definitions/confidence"
+    },
+    "verification_status": {
+      "enum": [
+        "reported",
+        "flagged",
+        "validated",
+        "verified"
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks_passed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks_failed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dq_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "flag": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "raised_by",
+        "reason"
+      ],
+      "properties": {
+        "raised_by": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        }
+      }
+    },
+    "validated_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "validated_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "aggregation": {
+      "type": "object",
+      "required": [
+        "aggregable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "equivalence_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aggregable": {
+          "enum": [
+            true,
+            false,
+            "conditional"
+          ]
+        },
+        "refusal_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "SEMANTIC_NON_EQUIVALENCE",
+            "UNKNOWN_VALUE",
+            "OPEN_CONFLICT",
+            "MISSING_DEFINITION",
+            "MISSING_COUNT_TYPE",
+            "PERIOD_MISMATCH",
+            "UNRESOLVED_DUPLICATE",
+            "POPULATION_OVERLAP",
+            "MISSING_PERIOD",
+            null
+          ]
+        },
+        "dedup_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "suspected_duplicate_of": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverage": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "contributing_units": {
+              "type": "integer"
+            },
+            "total_units": {
+              "type": "integer"
+            },
+            "share": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "parent_measurement_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "relation_type",
+          "measurement_id"
+        ],
+        "properties": {
+          "relation_type": {
+            "enum": [
+              "subset_of",
+              "funnel_stage",
+              "same_population_different_metric",
+              "restatement_of",
+              "conflicts_with"
+            ]
+          },
+          "measurement_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Lets the system show '200 reached, of which 120 trained, of which 60 graduated' instead of 380."
+    }
+  },
+  "allOf": [
+    {
+      "title": "P1/P9 - a fact requires a citation",
+      "if": {
+        "properties": {
+          "layer": {
+            "enum": [
+              "OFFICIAL_JCI_FACT",
+              "LOCAL_REPORTED_FACT"
+            ]
+          }
+        },
+        "required": [
+          "layer"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "required": [
+              "origin",
+              "quote"
+            ],
+            "properties": {
+              "quote": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "P1 - an OFFICIAL_JCI_FACT requires page and section",
+      "if": {
+        "properties": {
+          "layer": {
+            "const": "OFFICIAL_JCI_FACT"
+          }
+        },
+        "required": [
+          "layer"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "required": [
+              "origin",
+              "page",
+              "section",
+              "quote"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "P2 - calculated implies SEMANTIC_INTERPRETATION + formula + inputs",
+      "if": {
+        "properties": {
+          "value_status": {
+            "const": "calculated"
+          }
+        },
+        "required": [
+          "value_status"
+        ]
+      },
+      "then": {
+        "required": [
+          "formula",
+          "inputs"
+        ],
+        "properties": {
+          "layer": {
+            "const": "SEMANTIC_INTERPRETATION"
+          }
+        }
+      }
+    },
+    {
+      "title": "P3 - estimated implies SEMANTIC_INTERPRETATION + method",
+      "if": {
+        "properties": {
+          "value_status": {
+            "const": "estimated"
+          }
+        },
+        "required": [
+          "value_status"
+        ]
+      },
+      "then": {
+        "required": [
+          "method"
+        ],
+        "properties": {
+          "layer": {
+            "const": "SEMANTIC_INTERPRETATION"
+          }
+        }
+      }
+    },
+    {
+      "title": "P4 - unknown is not zero",
+      "if": {
+        "properties": {
+          "value_status": {
+            "enum": [
+              "unknown",
+              "visual_data_not_extracted"
+            ]
+          }
+        },
+        "required": [
+          "value_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "title": "P8 - a conflict keeps every value",
+      "if": {
+        "properties": {
+          "value_status": {
+            "const": "conflicting"
+          }
+        },
+        "required": [
+          "value_status"
+        ]
+      },
+      "then": {
+        "required": [
+          "conflicting_values",
+          "dq_refs"
+        ]
+      }
+    },
+    {
+      "title": "T2/V11 - verified requires evidence",
+      "if": {
+        "properties": {
+          "verification_status": {
+            "const": "verified"
+          }
+        },
+        "required": [
+          "verification_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_refs": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "evidence_refs"
+        ]
+      }
+    },
+    {
+      "title": "T4 - the engine can never validate or verify a JCI figure",
+      "if": {
+        "properties": {
+          "layer": {
+            "const": "OFFICIAL_JCI_FACT"
+          }
+        },
+        "required": [
+          "layer"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verification_status": {
+            "enum": [
+              "reported",
+              "flagged"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "T8 - a flagged measurement is never aggregable",
+      "if": {
+        "properties": {
+          "verification_status": {
+            "const": "flagged"
+          }
+        },
+        "required": [
+          "verification_status"
+        ]
+      },
+      "then": {
+        "required": [
+          "flag"
+        ],
+        "properties": {
+          "aggregation": {
+            "properties": {
+              "aggregable": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "Ratio without a base is meaningless (DQC-12/13)",
+      "if": {
+        "properties": {
+          "unit": {
+            "properties": {
+              "code": {
+                "enum": [
+                  "percent",
+                  "ratio"
+                ]
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "unit"
+        ]
+      },
+      "then": {
+        "properties": {
+          "population": {
+            "required": [
+              "base_population",
+              "internal_external",
+              "count_type"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "value_qualifier = range requires a range",
+      "if": {
+        "required": [
+          "value_qualifier"
+        ],
+        "properties": {
+          "value_qualifier": {
+            "const": "range"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "value_range"
+        ]
+      }
+    },
+    {
+      "title": "A refusal must state its reason",
+      "if": {
+        "properties": {
+          "aggregation": {
+            "properties": {
+              "aggregable": {
+                "const": false
+              }
+            },
+            "required": [
+              "aggregable"
+            ]
+          }
+        },
+        "required": [
+          "aggregation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "aggregation": {
+            "required": [
+              "refusal_reason"
+            ],
+            "properties": {
+              "refusal_reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "An aggregable measurement must carry its equivalence key",
+      "if": {
+        "properties": {
+          "aggregation": {
+            "properties": {
+              "aggregable": {
+                "const": true
+              }
+            },
+            "required": [
+              "aggregable"
+            ]
+          }
+        },
+        "required": [
+          "aggregation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "aggregation": {
+            "required": [
+              "equivalence_key"
+            ],
+            "properties": {
+              "equivalence_key": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "layer": {
+      "enum": [
+        "OFFICIAL_JCI_FACT",
+        "LOCAL_REPORTED_FACT",
+        "SEMANTIC_INTERPRETATION",
+        "PROPOSED_STANDARD"
+      ]
+    },
+    "confidence": {
+      "enum": [
+        "H",
+        "M",
+        "L"
+      ]
+    },
+    "geoLevel": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "layer": {
+          "$ref": "#/definitions/layer"
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "confidence": {
+          "$ref": "#/definitions/confidence"
+        }
+      }
+    }
+  }
+}
