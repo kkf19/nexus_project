@@ -2,15 +2,24 @@
 
 NEXUS transforme les textes libres décrivant des projets JCI en chiffres normalisés, reliés à leur phrase source exacte, et agrégés uniquement lorsque l'addition a un sens.
 
-> Dépôt construit progressivement pendant le hackathon. Ce README est complété (stack finale, instructions de lancement, lien de démo) à la fin de la construction — voir `docs/technical/dev-brief.md` §6.
+> Dépôt construit progressivement pendant le hackathon. Ce README est complété (lien de démo final) à la fin de la construction — voir `docs/technical/dev-brief.md` §6.
+
+## État d'avancement
+
+- [x] Phase 1 — Socle backend (schéma de base, moteur et validateurs branchés, CRUD minimal)
+- [x] Phase 2 — Pipeline IA (extraction + classement taxonomie, appels réels à Claude Haiku 4.5)
+- [ ] Phase 3 — Agrégation branchée sur l'API
+- [ ] Phase 4 — Frontend (les trois écrans)
+- [ ] Phase 5 — Bout en bout (AC-01 à AC-22)
+- [ ] Phase 6 — Livrables finaux
 
 ## Stack
 
 - **Backend** : Python + FastAPI + SQLAlchemy
 - **Base de données** : PostgreSQL (Supabase)
-- **Frontend** : Next.js (React + TypeScript)
+- **Frontend** : Next.js (React + TypeScript) — à venir
 - **Pipeline IA** : Anthropic Claude Haiku 4.5 (extraction + classement taxonomie)
-- **Hébergement** : Render/Railway (backend) · Vercel (frontend) · Supabase (base) · GitHub (dépôt)
+- **Hébergement** : Render (backend) · Vercel (frontend, à venir) · Supabase (base) · GitHub (dépôt)
 
 ## Documentation de référence
 
@@ -32,7 +41,24 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp ../.env.example ../.env   # puis renseigner les vraies valeurs
-python3 scripts/self_test.py   # auto-test sans base de données
-python3 scripts/init_db.py     # crée le schéma + charge la taxonomie sur Supabase
+python3 scripts/self_test.py           # auto-test sans base de données (validateurs + moteur)
+python3 scripts/export_schema_sql.py > ../supabase_init.sql   # si le schéma a changé
+python3 scripts/seed_demo_account.py   # crée le compte de démo DEMO-OL / DEMO-USER
 uvicorn app.main:app --reload
 ```
+
+Si la connexion directe à Postgres (port 5432) n'est pas joignable depuis votre réseau, `supabase_init.sql` se colle tel quel dans l'éditeur SQL de Supabase (Project → SQL Editor → New query → Run).
+
+## Déploiement du backend sur Render
+
+1. Sur [render.com](https://render.com), **New +** → **Web Service** → connecter ce dépôt GitHub (`kkf19/nexus_project`).
+2. Renseigner :
+   - **Root Directory** : `backend`
+   - **Build Command** : `pip install -r requirements.txt`
+   - **Start Command** : `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. Dans l'onglet **Environment**, ajouter ces variables (mêmes valeurs que dans votre `.env` local) :
+   - `DATABASE_URL`
+   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_MODEL` = `claude-haiku-4-5`
+   - `TAXONOMY_CONFIG_PATH` = `docs/technical/taxonomy.config.json`
+4. Créer le service. Render redéploie automatiquement à chaque `git push` sur `main`.
