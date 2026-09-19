@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { friendlyErrorMessage, getDashboard, getDashboardOverview, getTrace } from "@/lib/api";
 import { DEMO_ORGANIZATION_ID } from "@/lib/config";
 import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, sumDirectPeople, type DisplayBucket } from "@/lib/classify";
@@ -202,7 +202,7 @@ export default function DashboardsPage() {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-surface p-4">
       <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
@@ -256,7 +256,21 @@ function OverviewScreen({
         <StatCard
           label="Projets RISE"
           value={fmt(ov.rise_projects)}
-          sub={ov.rise_pct_of_ci !== null ? `${ov.rise_pct_of_ci}% des projets Community Impact` : "aucun projet Community Impact"}
+          sub={
+            // AC-31 : deux ratios, deux bases differentes, jamais confondues
+            // (c'est precisement l'ecart 53,47% RISE vs 44,64% CI du rapport
+            // JCI 2025, §1 du document de reference -- deux bases, pas une
+            // incoherence).
+            <>
+              {ov.rise_pct_of_ci !== null
+                ? `${ov.rise_pct_of_ci}% des projets Community Impact (base CI)`
+                : "aucun projet Community Impact"}
+              <br />
+              {ov.rise_pct_of_all !== null
+                ? `${ov.rise_pct_of_all}% de tous les projets (base tous projets)`
+                : null}
+            </>
+          }
         />
         <StatCard label="Pays actifs" value={fmt(ov.countries_active)} />
         <StatCard label="OL actives" value={fmt(ov.ols_active)} />

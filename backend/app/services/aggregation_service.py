@@ -543,6 +543,14 @@ def get_projects_overview(db: Session, *, view: str, scope_organization_id: str 
         "projects_measured": measured,
         "rise_projects": rise_yes,
         "rise_pct_of_ci": round(100 * rise_yes / ci_projects, 1) if ci_projects else None,
+        # AC-31 : "RISE affiche avec deux ratios etiquetes (base CI / base
+        # tous projets)" -- impact-science.md §7 (Ecran 1) ne mentionne
+        # explicitement que le ratio base CI ("% des projets CI"), mais
+        # AC-31 en exige un second, base sur le total des projets, pour
+        # eviter la confusion identifiee en §1 du doc (53,47% RISE vs
+        # 44,64% CI dans le rapport JCI 2025 : deux bases differentes,
+        # jamais confondues). Les deux ratios cohabitent, chacun etiquete.
+        "rise_pct_of_all": round(100 * rise_yes / total_projects, 1) if total_projects else None,
         "countries_active": len(countries),
         "ols_active": len(ols),
         "aggregates": aggregate_dicts,

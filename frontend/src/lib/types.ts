@@ -341,6 +341,7 @@ export interface DashboardOverview {
   projects_measured: number;
   rise_projects: number;
   rise_pct_of_ci: number | null;
+  rise_pct_of_all: number | null;
   countries_active: number;
   ols_active: number;
   aggregates: Aggregate[];
