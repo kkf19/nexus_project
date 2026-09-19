@@ -7,10 +7,24 @@ Voir dev-brief.md Annexe A pour les 13 points d'entrée. Le pipeline IA
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import aggregations, measurements, projects, submissions, taxonomy
 
 app = FastAPI(title="NEXUS API", version="0.1.0")
+
+# Le frontend (Vercel) et l'API (Render) sont sur deux domaines differents :
+# sans CORS, le navigateur bloque tous les appels fetch() du frontend.
+# Pas d'authentification par cookie dans ce MVP (compte de demo unique,
+# D-04) : autoriser toutes les origines est sans risque ici et evite de
+# devoir mettre a jour cette liste a chaque redeploiement Vercel (URL de
+# previsualisation differente a chaque fois).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(submissions.router)
 app.include_router(projects.router)

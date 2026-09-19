@@ -9,7 +9,7 @@ NEXUS transforme les textes libres décrivant des projets JCI en chiffres normal
 - [x] Phase 1 — Socle backend (schéma de base, moteur et validateurs branchés, CRUD minimal)
 - [x] Phase 2 — Pipeline IA (extraction + classement taxonomie, appels réels à Claude Haiku 4.5)
 - [x] Phase 3 — Agrégation branchée sur l'API (`/aggregations/run`, `/dashboards/{view}`, `/trace/{id}`, `/aggregations/check-pair`, revue `/measurements/{id}/review`, `/projects/{id}` et `/measurements/{id}` complets)
-- [ ] Phase 4 — Frontend (les trois écrans)
+- [x] Phase 4 — Frontend (les trois écrans : saisie, confirmation, tableaux de bord) — compte de démo unique `DEMO-OL`, pas d'écran de connexion pour le hackathon (décision du 2026-09-19)
 - [ ] Phase 5 — Bout en bout (AC-01 à AC-22)
 - [ ] Phase 6 — Livrables finaux
 
@@ -17,9 +17,9 @@ NEXUS transforme les textes libres décrivant des projets JCI en chiffres normal
 
 - **Backend** : Python + FastAPI + SQLAlchemy
 - **Base de données** : PostgreSQL (Supabase)
-- **Frontend** : Next.js (React + TypeScript) — à venir
+- **Frontend** : Next.js (React + TypeScript), Tailwind CSS
 - **Pipeline IA** : Anthropic Claude Haiku 4.5 (extraction + classement taxonomie)
-- **Hébergement** : Render (backend) · Vercel (frontend, à venir) · Supabase (base) · GitHub (dépôt)
+- **Hébergement** : Render (backend) · Vercel (frontend) · Supabase (base) · GitHub (dépôt)
 
 ## Documentation de référence
 
@@ -84,3 +84,26 @@ Si la connexion directe à Postgres (port 5432) n'est pas joignable depuis votre
    - `ANTHROPIC_MODEL` = `claude-haiku-4-5`
    - `TAXONOMY_CONFIG_PATH` = `docs/technical/taxonomy.config.json`
 4. Créer le service. Render redéploie automatiquement à chaque `git push` sur `main`.
+
+## Frontend — démarrage local
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local   # l'URL du backend Render y est déjà pré-remplie
+npm run dev
+```
+
+Ouvrir `http://localhost:3000`.
+
+## Déploiement du frontend sur Vercel
+
+1. Sur [vercel.com](https://vercel.com), **Add New…** → **Project** → connecter ce dépôt GitHub (`kkf19/nexus_project`).
+2. Dans la configuration du projet :
+   - **Root Directory** : `frontend`
+   - Le framework (Next.js) est détecté automatiquement, rien d'autre à changer.
+3. Dans **Environment Variables**, ajouter :
+   - `NEXT_PUBLIC_API_BASE_URL` = l'URL de votre service Render (ex. `https://nexus-project-w4ux.onrender.com`)
+4. Cliquer **Deploy**. Vercel redéploie automatiquement à chaque `git push` sur `main`, et donne un lien de démo public (`*.vercel.app`).
+
+Le compte utilisé par le site est le compte de démo unique `DEMO-OL` — il n'y a pas d'écran de connexion dans ce MVP (voir « État d'avancement » ci-dessus).
