@@ -96,9 +96,16 @@ def create_submission(payload: SubmissionCreate, db: Session = Depends(get_db)):
         raw_text_sha256=hashlib.sha256(payload.raw_text.encode("utf-8")).hexdigest(),
         pipeline_status="received",
     )
-    db.add(submission)
-    db.commit()
-    db.refresh(submission)
+    try:
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+    except Exception as exc:
+        db.rollback()
+        # Diagnostic temporaire (deploiement hackathon) : on remonte le
+        # message d'erreur reel plutot qu'un 500 generique, le temps de
+        # stabiliser le premier deploiement en production.
+        raise HTTPException(status_code=500, detail=f"creation submission : {exc}") from exc
 
     _run_pipeline(submission, db)
     db.refresh(submission)
