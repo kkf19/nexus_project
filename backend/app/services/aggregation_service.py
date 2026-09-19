@@ -585,7 +585,14 @@ def get_area_breakdown(db: Session, *, view: str, scope_organization_id: str | N
         families: list[dict] = []
         rise_block: dict | None = None
         top_sdgs: list[dict] = []
+        measured_count = 0
         if area_project_ids:
+            measured_count = len(set(db.execute(
+                select(models.Project.project_id).where(
+                    models.Project.project_id.in_(area_project_ids),
+                    models.Project.outcome_status == "measured",
+                )
+            ).scalars().all()))
             fam_counts: dict[str, set[str]] = {}
             for fam_code, pid in db.execute(
                 select(models.ProjectActivityFamily.code, models.ProjectActivityFamily.project_id)
@@ -634,6 +641,7 @@ def get_area_breakdown(db: Session, *, view: str, scope_organization_id: str | N
             "label": area_def.get("label", code),
             "total_projects": len(area_project_ids),
             "secondary_only_count": len(secondary_only),
+            "projects_measured": measured_count,
             "families": families,
             "rise": rise_block,
             "top_sdgs": top_sdgs,
