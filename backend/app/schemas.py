@@ -59,24 +59,45 @@ class MeasurementOut(BaseModel):
 # ---------------------------------------------------------------------------
 # Annexe A #5 — POST /submissions/{id}/confirm (dev-brief.md section 3.2,
 # revu par impact-science.md D-23 a D-31)
+#
+# A5 : la fiche de confirmation suit desormais les 4 dimensions de
+# impact-science.md section 6, chacune confirmee explicitement par le SG (le
+# "role" primary/secondary d'une Area, le libelle "Autre" d'une famille, le
+# statut RISE, la justification de chaque ODD ne sont plus deductibles d'une
+# simple liste de codes -- ils doivent etre soumis tels quels, D-28). Ceci
+# remplace la forme Phase 3 (liste de codes bruts + 4 cases a cocher C1-C4) :
+# rupture de contrat assumee, le frontend A6 doit envoyer cette nouvelle forme.
 # ---------------------------------------------------------------------------
+class ConfirmActivityFamily(BaseModel):
+    code: str
+    other_label: str | None = None  # obligatoire si code = *_OTHER ou OTHER (D-25, AC-27)
+
+
+class ConfirmArea(BaseModel):
+    code: str
+    role: str  # primary|secondary -- exactement 1 "primary" par projet (D-26, AC-26)
+
+
+class ConfirmRise(BaseModel):
+    # yes|no|not_applicable -- "yes"/"no" seulement si Community Impact (CI)
+    # est parmi les Areas confirmees, "not_applicable" sinon (D-24, AC-25).
+    status: str = "not_applicable"
+    pillars: list[str] = []  # >=1 requis si status == "yes"
+
+
 class ConfirmSdg(BaseModel):
     goal: int
-    role: str  # primary|secondary|unknown
+    role: str  # primary|secondary|unknown -- exactement 1 "primary" (R5, D-27)
+    justification: str  # phrase justificative -- obligatoire pour tout ODD retenu (D-27, AC-28)
 
 
 class ConfirmAxes(BaseModel):
-    # NOTE (A3) : forme Phase 3 conservee telle quelle ici. Les changements
-    # d'impact-science.md sur cet axe (role primary/secondary par Area,
-    # activity_families comme 1ere dimension, rise_status conditionne a CI,
-    # ODD sans plafond mais justifies) sont apportes en A4/A5, en meme temps
-    # que le pipeline IA et la validation qui les exploitent -- pour ne pas
-    # ajouter des champs de schema qu'aucun code ne consomme encore.
-    area_of_opportunity: list[str] = []   # >=1 requis (R2)
-    programme: list[str] = []             # 0..n, DEPRECATED (D-23) -- conserve pour compatibilite,
-                                           # plus alimente a partir de v0.3.0
-    rise_pillars: list[str] = []          # >=1 requis si "RISE" dans programme (R4, forme Phase 3)
-    sdgs: list[ConfirmSdg] = []           # >=1, exactement 1 "primary" (R5)
+    activity_families: list[ConfirmActivityFamily] = []  # >=1 requis (D-25)
+    area_of_opportunity: list[ConfirmArea] = []           # >=1 requis, 1 seule "primary" (D-26)
+    programme: list[str] = []             # DEPRECATED (D-23) -- conserve pour compatibilite
+                                           # historique de lecture, plus jamais alimente ni exploite.
+    rise: ConfirmRise = ConfirmRise()     # D-24
+    sdgs: list[ConfirmSdg] = []           # >=1, exactement 1 "primary", justifies (D-27)
 
 
 class ConfirmProject(BaseModel):
@@ -106,22 +127,20 @@ class ConfirmCandidateInput(BaseModel):
                                    # la population résultante est "mixed" (voir value_internal/external)
     value_internal: float | None = None  # requis si internal_external résultant == "mixed" (D-26/AC-30)
     value_external: float | None = None  # requis si internal_external résultant == "mixed" (D-26/AC-30)
-    count_type: str | None = None       # reponse C1 (beneficiaires uniquement)
-    internal_external: str | None = None  # reponse C2 (beneficiaires uniquement)
+    count_type: str | None = None       # reponse "type de comptage" (direct/indirect/audience)
+    internal_external: str | None = None  # reponse "pour qui" (interne/externe/mixte)
     corrected: bool = False       # trace derivation "human_validation"
 
 
-class ConfirmConfirmations(BaseModel):
-    C1: bool = False
-    C2: bool = False
-    C3: bool = False
-    C4: bool = False
-
-
 class ConfirmRequest(BaseModel):
+    # NOTE (A5) : ConfirmConfirmations (C1-C4) est retiree -- D-28 remplace ce
+    # mecanisme de cases a cocher generiques par l'obligation, verifiee champ
+    # par champ, que chaque donnee necessaire au dashboard soit realement
+    # renseignee (voir _validate_classification/_validate_project cote
+    # confirm_service.py). Une fiche ne peut donc plus etre confirmee "a
+    # blanc" par 4 cases cochees sans rapport avec les valeurs saisies.
     project: ConfirmProject
     axes: ConfirmAxes
-    confirmations: ConfirmConfirmations
     candidates: list[ConfirmCandidateInput] = []
     confirmed_by: str = "DEMO-USER"
 

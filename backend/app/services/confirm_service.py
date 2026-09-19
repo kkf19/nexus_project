@@ -21,9 +21,22 @@ project.name/period. Le nombre de benevoles JCI devient sa propre mesure
 (metric_code=VOLUNTEERS, internal_external=internal) ; les heures de
 benevolat sont pre-calculees (benevoles x duree) sauf correction du SG.
 
-Si UN SEUL candidat retenu echoue la validation, RIEN n'est ecrit (section
-3.2, "si la transaction echoue, rien n'est ecrit") : cette fonction ne fait
-aucun commit elle-meme, c'est au routeur de le faire apres coup.
+A5 (impact-science.md D-25 a D-28) : la classification confirmee par le SG
+(familles d'activite, Areas + principale, RISE, ODD + justification) est
+validee EN BLOC avant toute ecriture -- exactement 1 Area primary, RISE
+coherent avec la presence de Community Impact (CI) dans les Areas, au moins
+un pilier si RISE=yes, un libelle pour toute famille "Autre", et une
+justification non vide pour chaque ODD retenu avec exactement 1 principal.
+La regle dure RI-10/D-26 ("public 100% interne => jamais CI") est appliquee
+ici sur la population REELLEMENT CONFIRMEE par le SG (pas seulement sur la
+proposition de l'IA, deja verifiee de facon best-effort en amont par
+ai_pipeline.validate_mapping_contract) : c'est le dernier verrou avant
+ecriture.
+
+Si UN SEUL candidat retenu (ou la classification, ou le projet) echoue la
+validation, RIEN n'est ecrit (section 3.2, "si la transaction echoue, rien
+n'est ecrit") : cette fonction ne fait aucun commit elle-meme, c'est au
+routeur de le faire apres coup.
 """
 from __future__ import annotations
 
@@ -36,9 +49,6 @@ from sqlalchemy.orm import Session
 from app import models
 from app.services import engine_service, mo_builder, validators_service
 from app.services.ai_pipeline import _codes
-
-RISE_PROGRAMME_CODE = "RISE"  # historique (axe programme, D-23 DEPRECATED) -- conserve
-                                # uniquement pour lire d'anciennes donnees, plus alimente.
 
 # D-30 / RI-07 : un chiffre confirme a la fiche mais absent du texte source
 # soumis (l'IA ne l'y a pas trouve) n'a pas de citation a donner -- on ne
@@ -64,52 +74,115 @@ def _index_by_candidate_id(items: list[dict]) -> dict[str, dict]:
     return {it.get("candidate_id"): it for it in items if it.get("candidate_id")}
 
 
-def _validate_axes(axes, taxonomy_content: dict) -> list[str]:
-    """R2 (>=1 domaine), R5 (exactement 1 SDG primary), R4 (piliers RISE
-    requis si RISE coche), et codes de taxonomie inconnus rejetes (jamais
-    enregistres).
+def _effective_internal_external(mapping: dict, user_input) -> str | None:
+    """Valeur internal_external REELLEMENT retenue pour un candidat : celle
+    saisie/corrigee par le SG si presente, sinon celle proposee par l'IA.
+    Utilisee a la fois pour construire les Measurement Objects et pour la
+    regle dure RI-10/D-26 (public 100% interne => jamais CI), qui doit juger
+    la population CONFIRMEE, pas seulement proposee."""
+    ie = mapping.get("internal_external")
+    if user_input is not None and user_input.internal_external:
+        ie = user_input.internal_external
+    return ie
 
-    NOTE (A3) : cette fonction garde son perimetre Phase 3 (axes.programme et
-    axes.rise_pillars, forme historique). Les regles propres a
-    impact-science.md (Area principale unique, RISE conditionne a CI, ODD
-    sans plafond mais justifies, familles d'activite) sont ajoutees en A5
-    sans casser ce qui est deja verifie ici.
+
+def _validate_classification(
+    axes, taxonomy_content: dict, *, effective_internal_externals: list[str | None],
+) -> list[str]:
+    """impact-science.md section 6 / D-25 a D-27 : structure des 4 dimensions
+    de classification confirmees par le SG. Chaque message nomme le champ
+    concerne (AC-16) ; rien n'est ecrit si une seule regle echoue.
+
+    - D-25/AC-27 : au moins une famille d'activite ; libelle obligatoire pour
+      toute famille "Autre" (code se terminant par _OTHER, ou "OTHER").
+    - D-26/AC-26 : au moins une Area, EXACTEMENT une marquee "primary".
+    - D-24/AC-25 : RISE coherent avec la presence de Community Impact (CI)
+      parmi les Areas confirmees -- "yes"/"no" seulement si CI est present,
+      "not_applicable" sinon ; au moins un pilier si "yes", aucun sinon.
+    - D-27/AC-28 : au moins un ODD, EXACTEMENT un principal, une justification
+      non vide pour CHAQUE ODD retenu.
+    - RI-10/D-26/AC-24 : si Community Impact (CI) est confirme, la population
+      CONFIRMEE de tous les candidats connus ne peut pas etre 100% interne.
     """
     errors: list[str] = []
     tc_axes = taxonomy_content["classification_axes"]
+    allowed_family = set(_codes(tc_axes["activity_family"]))
     allowed_area = set(_codes(tc_axes["area_of_opportunity"]))
-    allowed_programme = set(_codes(tc_axes["programme"]))
     allowed_rise = set(_codes(taxonomy_content["rise_pillars"]))
 
+    # --- Familles d'activite (D-25 / AC-27) ---
+    if not axes.activity_families:
+        errors.append("axes.activity_families : au moins une famille d'activite est requise (D-25)")
+    for fam in axes.activity_families:
+        if fam.code not in allowed_family:
+            errors.append(f"axes.activity_families : code inconnu du referentiel : {fam.code!r}")
+        elif (fam.code.endswith("_OTHER") or fam.code == "OTHER") and not (fam.other_label or "").strip():
+            errors.append(
+                f"axes.activity_families : libelle obligatoire pour la famille {fam.code!r} (D-25, AC-27)"
+            )
+
+    # --- Areas (D-26 / AC-26) ---
     if not axes.area_of_opportunity:
         errors.append("axes.area_of_opportunity : au moins un domaine d'intervention est requis (R2)")
-    for code in axes.area_of_opportunity:
-        if code not in allowed_area:
-            errors.append(f"axes.area_of_opportunity : code inconnu du referentiel : {code!r}")
-    for code in axes.programme:
-        if code not in allowed_programme:
-            errors.append(f"axes.programme : code inconnu du referentiel : {code!r}")
-    for code in axes.rise_pillars:
+    for area in axes.area_of_opportunity:
+        if area.code not in allowed_area:
+            errors.append(f"axes.area_of_opportunity : code inconnu du referentiel : {area.code!r}")
+        if area.role not in ("primary", "secondary"):
+            errors.append(f"axes.area_of_opportunity : role invalide pour {area.code!r} : {area.role!r}")
+    area_codes = {a.code for a in axes.area_of_opportunity}
+    primary_areas = [a for a in axes.area_of_opportunity if a.role == "primary"]
+    if axes.area_of_opportunity and len(primary_areas) != 1:
+        errors.append(
+            f"axes.area_of_opportunity : exactement une Area 'primary' est requise "
+            f"(trouve : {len(primary_areas)}) (D-26, AC-26)"
+        )
+
+    # --- RISE (D-24 / AC-25) ---
+    ci_present = "CI" in area_codes
+    rise_status = axes.rise.status
+    if rise_status not in ("yes", "no", "not_applicable"):
+        errors.append(f"axes.rise.status : valeur invalide : {rise_status!r}")
+    else:
+        if ci_present and rise_status not in ("yes", "no"):
+            errors.append(
+                "axes.rise.status : Community Impact est coche, RISE doit etre confirme "
+                "'yes' ou 'no' (ne peut pas rester vide/'not_applicable') (D-24, AC-25)"
+            )
+        if not ci_present and rise_status != "not_applicable":
+            errors.append(
+                "axes.rise.status : ne peut valoir 'yes' ou 'no' que si Community Impact "
+                "(CI) est coche parmi les Areas (D-24, AC-25)"
+            )
+    if rise_status == "yes" and not axes.rise.pillars:
+        errors.append("axes.rise.pillars : au moins un pilier est requis quand RISE = 'yes' (D-24, AC-25)")
+    if rise_status != "yes" and axes.rise.pillars:
+        errors.append("axes.rise.pillars : aucun pilier ne doit etre present quand RISE != 'yes'")
+    for code in axes.rise.pillars:
         if code not in allowed_rise:
-            errors.append(f"axes.rise_pillars : code inconnu du referentiel : {code!r}")
+            errors.append(f"axes.rise.pillars : code inconnu du referentiel : {code!r}")
 
-    if RISE_PROGRAMME_CODE in axes.programme and not axes.rise_pillars:
-        errors.append("axes.rise_pillars : au moins un pilier RISE est requis quand RISE est coche (R4)")
-
-    primary_count = sum(1 for s in axes.sdgs if s.role == "primary")
+    # --- ODD (D-27 / AC-28) ---
     if not axes.sdgs:
-        errors.append("axes.sdgs : au moins un ODD est requis, avec exactement un principal (R5)")
-    elif primary_count != 1:
-        errors.append(f"axes.sdgs : exactement un ODD 'primary' est requis (trouve : {primary_count})")
+        errors.append("axes.sdgs : au moins un ODD est requis, avec exactement un principal (R5, D-27)")
+    for sdg in axes.sdgs:
+        if not (1 <= sdg.goal <= 17):
+            errors.append(f"axes.sdgs : numero d'ODD hors 1..17 : {sdg.goal}")
+        if not (sdg.justification or "").strip():
+            errors.append(f"axes.sdgs : justification obligatoire pour l'ODD {sdg.goal} (D-27, AC-28)")
+    primary_sdgs = sum(1 for s in axes.sdgs if s.role == "primary")
+    if axes.sdgs and primary_sdgs != 1:
+        errors.append(f"axes.sdgs : exactement un ODD 'primary' est requis (trouve : {primary_sdgs}) (AC-28)")
 
-    return errors
+    # --- Regle dure RI-10/D-26 : public 100% interne => jamais CI (AC-24) ---
+    # Best-effort au niveau IA (A4), verrou definitif ici sur la population
+    # REELLEMENT CONFIRMEE. On ne bloque que si au moins une population est
+    # CONNUE (jamais d'invention a partir d'une absence d'information).
+    known_ie = [ie for ie in effective_internal_externals if ie in ("internal", "external", "mixed")]
+    if ci_present and known_ie and all(ie == "internal" for ie in known_ie):
+        errors.append(
+            "axes.area_of_opportunity : public interne => Community Impact impossible (D-26, AC-24)"
+        )
 
-
-def _validate_confirmations(confirmations) -> list[str]:
-    errors = []
-    for code in ("C1", "C2", "C3", "C4"):
-        if not getattr(confirmations, code):
-            errors.append(f"confirmation {code} manquante : la fiche ne peut pas etre confirmee (AC-16)")
     return errors
 
 
@@ -296,11 +369,10 @@ def _build_measurement_objects_for_candidate(
     """
     candidate_id = extraction_cand.get("candidate_id")
     count_type = mapping.get("count_type")
-    internal_external = mapping.get("internal_external")
+    internal_external = _effective_internal_external(mapping, user_input)
     corrected = bool(user_input and user_input.corrected)
     if user_input is not None:
         count_type = user_input.count_type or count_type
-        internal_external = user_input.internal_external or internal_external
 
     if internal_external == "mixed":
         if user_input is None or user_input.value_internal is None or user_input.value_external is None:
@@ -371,10 +443,7 @@ def _build_resource_measurements(
 
     volunteers_extraction / duration_extraction : dict optionnel
     {"origin": "quoted"|"inferred", "quote": str|None} tel que produit par le
-    pipeline IA (A4) pour project.jci_volunteers_count / activity_duration_hours
-    -- absent tant que A4 n'alimente pas encore ces champs, auquel cas on
-    traite prudemment la valeur comme non citee (RI-07 : jamais de fausse
-    citation).
+    pipeline IA (A4) pour project.jci_volunteers_count / activity_duration_hours.
     """
     geography = _base_geography(organization)
     subject = {"type": "project", "id": project_id, **({"name": project_name} if project_name else {})}
@@ -543,13 +612,6 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
     if not organization:
         raise ConfirmError([{"message": f"organisation introuvable : {submission.organization_id}"}])
 
-    errors: list[dict] = []
-    errors += [{"message": m} for m in _validate_confirmations(payload.confirmations)]
-    errors += [{"message": m} for m in _validate_axes(payload.axes, taxonomy_content)]
-    errors += [{"message": m} for m in _validate_project(payload.project)]
-    if errors:
-        raise ConfirmError(errors)
-
     candidates_rows = db.execute(
         select(models.ExtractionCandidate)
         .where(models.ExtractionCandidate.submission_id == submission.submission_id)
@@ -569,8 +631,29 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
         cid for cid in extraction_by_id
         if cid in mapping_by_id and (cid not in user_by_id or user_by_id[cid].include)
     ]
-    if not included_ids:
-        raise ConfirmError([{"message": "aucun chiffre retenu : rien a confirmer"}])
+    # NOTE (A5) : pas de rejet ici si included_ids est vide -- un projet sans
+    # aucun chiffre generique extrait (texte purement qualitatif) reste
+    # confirmable des lors que les mesures de RESSOURCES (benevoles JCI,
+    # heures, toujours construites plus bas, D-28) sont valides. Le vrai
+    # garde-fou "rien a ecrire du tout" est le controle sur `all_mos` a la
+    # fin de cette fonction, apres l'ajout des mesures de ressources.
+
+    # A5 : la population REELLEMENT confirmee (IA + eventuelle correction SG)
+    # de chaque candidat retenu, calculee AVANT toute validation, pour que la
+    # regle dure RI-10/D-26 (AC-24) juge les donnees confirmees, pas la seule
+    # proposition de l'IA.
+    effective_ies = [
+        _effective_internal_external(mapping_by_id[cid], user_by_id.get(cid))
+        for cid in included_ids
+    ]
+
+    errors: list[dict] = []
+    errors += [{"message": m} for m in _validate_classification(
+        payload.axes, taxonomy_content, effective_internal_externals=effective_ies,
+    )]
+    errors += [{"message": m} for m in _validate_project(payload.project)]
+    if errors:
+        raise ConfirmError(errors)
 
     # Identifiants generes a l'avance (SINGLE, INT, EXT) : un candidat non
     # mixte n'utilise que SINGLE, un candidat mixte que INT+EXT. Les ids non
@@ -593,11 +676,20 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
         ) else ids_by_candidate[cid]["SINGLE"]
 
     project_id = f"PRJ-{uuid.uuid4().hex[:12]}"
+    # taxonomy_refs (snapshot pose sur CHAQUE mesure, a titre informatif) est
+    # une forme FIGEE par measurement-object.schema.json (additionalProperties
+    # false : seules area_of_opportunity/programme/rise_pillars/activity_type/
+    # target_group/sdgs/layer sont autorisees). Le role primary/secondary par
+    # Area, le libelle "Autre" par famille et la justification par ODD --
+    # toutes nouvelles avec impact-science.md -- sont donc stockes dans les
+    # tables project_* dediees (ecrites plus bas), jamais dans ce schema
+    # immuable : on ne le modifie pas (regle de reutilisation, Etape 0).
     taxonomy_refs_snapshot = {
-        "area_of_opportunity": list(payload.axes.area_of_opportunity),
-        "programme": list(payload.axes.programme),
-        "sdgs": [s.model_dump() for s in payload.axes.sdgs],
-        "activity_type": (standardized.payload.get("project_classification") or {}).get("activity_type", []),
+        "area_of_opportunity": [a.code for a in payload.axes.area_of_opportunity],
+        "programme": [],  # DEPRECATED (D-23) -- toujours vide desormais
+        "rise_pillars": list(payload.axes.rise.pillars),
+        "sdgs": [{"goal": s.goal, "role": s.role} for s in payload.axes.sdgs],
+        "activity_type": [f.code for f in payload.axes.activity_families],  # alias derive (compat)
     }
 
     all_mos: dict[str, dict] = {}
@@ -699,8 +791,7 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
             if payload.project.follow_up_date else None
         ),
         activity_duration_hours=payload.project.activity_duration_hours,
-        # rise_status : calcule en A5 a partir des Areas confirmees (D-24) --
-        # laisse a NULL ici, rempli par la suite de la validation des axes.
+        rise_status=payload.axes.rise.status,  # D-24 -- deja valide coherent avec CI ci-dessus
         programme_confirmed=True,
         taxonomy_version=taxonomy_release.version,
         confirmed_by=payload.confirmed_by,
@@ -708,13 +799,13 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
     )
     db.add(project)
 
-    for code in payload.axes.area_of_opportunity:
-        db.add(models.ProjectAreaOfOpportunity(project_id=project_id, code=code,
+    for area in payload.axes.area_of_opportunity:
+        db.add(models.ProjectAreaOfOpportunity(project_id=project_id, code=area.code, role=area.role,
                                                 confirmed_by=payload.confirmed_by, confirmed_at=now))
-    for code in payload.axes.programme:
-        db.add(models.ProjectProgramme(project_id=project_id, code=code,
-                                        confirmed_by=payload.confirmed_by, confirmed_at=now))
-    for code in payload.axes.rise_pillars:
+    for fam in payload.axes.activity_families:
+        db.add(models.ProjectActivityFamily(project_id=project_id, code=fam.code, other_label=fam.other_label,
+                                             confirmed_by=payload.confirmed_by, confirmed_at=now))
+    for code in payload.axes.rise.pillars:
         db.add(models.ProjectRisePillar(project_id=project_id, code=code,
                                          confirmed_by=payload.confirmed_by, confirmed_at=now))
     for sdg in payload.axes.sdgs:
