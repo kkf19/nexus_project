@@ -1,11 +1,22 @@
 """Pipeline IA -- etapes STRUCTURED (extraction, contrat NEXUS-EXTRACTION-v0,
-dev-brief.md section 4.1) et STANDARDIZED (mapping taxonomie, section 4.2).
+dev-brief.md section 4.1) et STANDARDIZED (mapping taxonomie, section 4.2),
+revu par impact-science.md (D-23 a D-31).
 
 Appels REELS a l'API Anthropic (Claude Haiku 4.5) : pas de simulation, pas de
 valeur codee en dur a la place d'un appel LLM (dev-brief.md section 3).
 
 Toutes les listes de codes viennent du contenu de taxonomy_release charge en
 base et passe en parametre : jamais recopiees en dur ici (dev-brief.md 2.1).
+
+Ordre de classement impose par impact-science.md section 0 :
+    famille d'activite -> Areas (1 principale) -> RISE (seulement si CI
+    figure parmi les Areas) -> ODD (sans plafond, 1 principal, une
+    justification par valeur).
+Le programme (axe B de D-07) est DEPRECATED depuis v0.3.0 (D-23) : ce
+pipeline ne le demande plus a l'IA. Il n'existe pas de champ "programme
+officiel JCI" sur le projet (decision explicite du PO, 2026-09-19) --
+`activity_family.jci_programme_examples` dans taxonomy.config.json reste une
+metadonnee informative du referentiel, jamais une question posee au SG.
 """
 from __future__ import annotations
 
@@ -42,8 +53,22 @@ def _codes(node) -> list[str]:
 
 # ---------------------------------------------------------------------------
 # Etape STRUCTURED -- contrat NEXUS-EXTRACTION-v0 (dev-brief.md 4.1)
+# Etendu par impact-science.md D-25/D-28/D-30 : deux nouveaux champs projet
+# dedies (benevoles JCI, duree de l'activite), sur le meme modele que
+# project.name/period ({value, origin, quote}) -- jamais un candidat
+# numerique generique de plus (A3 : ils alimentent des mesures a part).
 # ---------------------------------------------------------------------------
 EXTRACTION_TOOL_NAME = "emit_extraction"
+
+_VALUE_ORIGIN_BLOCK = {
+    "type": "object",
+    "required": ["value", "origin", "quote"],
+    "properties": {
+        "value": {"type": ["number", "null"]},
+        "origin": {"type": "string", "enum": ["inferred", "quoted"]},
+        "quote": {"type": ["string", "null"]},
+    },
+}
 
 EXTRACTION_SCHEMA = {
     "type": "object",
@@ -55,7 +80,9 @@ EXTRACTION_SCHEMA = {
         },
         "project": {
             "type": "object",
-            "required": ["name", "period"],
+            "required": [
+                "name", "period", "jci_volunteers_count", "activity_duration_hours",
+            ],
             "properties": {
                 "name": {
                     "type": "object",
@@ -75,6 +102,22 @@ EXTRACTION_SCHEMA = {
                         "reporting_year": {"type": ["integer", "null"]},
                         "quote": {"type": ["string", "null"]},
                     },
+                },
+                "jci_volunteers_count": {
+                    **_VALUE_ORIGIN_BLOCK,
+                    "description": (
+                        "Nombre de benevoles/membres JCI ayant organise ou realise le "
+                        "projet -- JAMAIS le public beneficiaire. null si non precise."
+                    ),
+                },
+                "activity_duration_hours": {
+                    **_VALUE_ORIGIN_BLOCK,
+                    "description": (
+                        "Duree de l'activite elle-meme, en heures. Convertir une duree "
+                        "donnee en jours (ex: '2 jours') en heures si le texte le permet "
+                        "raisonnablement ; null si aucune duree n'est donnee ou si elle "
+                        "est trop ambigue pour etre convertie."
+                    ),
                 },
             },
         },
@@ -127,13 +170,15 @@ Tu lis un texte libre ecrit par une organisation locale JCI decrivant un projet,
 
 Regles obligatoires :
 1. `quote` doit etre une sous-chaine EXACTE du texte source (memes caracteres, aucune reformulation).
-2. TOUT nombre present dans le texte doit apparaitre soit dans `candidates`, soit dans `unparsed_numbers` avec une raison (ex: "date, pas une mesure"). Aucun chiffre n'est ignore en silence.
+2. TOUT nombre present dans le texte doit apparaitre soit dans `candidates`, soit dans `unparsed_numbers` avec une raison (ex: "date, pas une mesure"). Aucun chiffre n'est ignore en silence. EXCEPTION : le nombre de benevoles JCI et la duree de l'activite ne vont PAS dans `candidates` (ils ont leurs propres champs dedies ci-dessous) -- mets alors leur raison ("benevoles JCI, champ dedie" / "duree de l'activite, champ dedie") dans `unparsed_numbers` si tu veux tracer que ce nombre a bien ete vu.
 3. `value` = null si le nombre est illisible ou absent. JAMAIS 0 a la place d'une valeur inconnue.
 4. Les mots "environ", "plus de", "au moins", "jusqu'a" deviennent value_qualifier = approx / at_least / at_most / range (avec value_range rempli si "range"). Le qualificatif n'invente pas de valeur.
 5. `definition_text` = null si le texte ne definit pas ce qui est compte.
 6. `project.name` : si le texte ne donne pas de nom explicite, deduis un nom court factuel (origin="inferred", quote=null) ; sinon origin="quoted" avec la citation exacte.
 7. `project.period` : extrais les dates si elles sont ecrites, calcule `reporting_year` a partir d'elles ; si aucune date n'est donnee, mets tout a null.
 8. Detecte la langue du texte pour `language`.
+9. `project.jci_volunteers_count` : le nombre de benevoles ou membres JCI qui ont organise/realise le projet (jamais le public beneficiaire, jamais un total qui melangerait les deux). null si non precise, avec quote=null dans ce cas.
+10. `project.activity_duration_hours` : la duree de l'ACTIVITE elle-meme (pas la duree de la campagne de communication, pas la periode de collecte de fonds), en heures. Si le texte donne une duree en jours ou en creneau horaire ("de 14h a 18h"), convertis-la en heures et garde la citation d'origine dans `quote`. null si aucune duree exploitable n'est donnee.
 
 Reponds UNIQUEMENT en appelant l'outil fourni, avec les positions `span` en nombre de caracteres depuis le debut du texte source."""
 
@@ -183,6 +228,16 @@ def validate_extraction_contract(extraction: dict, raw_text: str) -> list[str]:
     period_quote = (proj.get("period") or {}).get("quote")
     if period_quote and period_quote not in raw_text:
         errors.append(f"CTL-QUOTE: project.period.quote absente du texte source : {period_quote!r}")
+    volunteers_quote = (proj.get("jci_volunteers_count") or {}).get("quote")
+    if volunteers_quote and volunteers_quote not in raw_text:
+        errors.append(
+            f"CTL-QUOTE: project.jci_volunteers_count.quote absente du texte source : {volunteers_quote!r}"
+        )
+    duration_quote = (proj.get("activity_duration_hours") or {}).get("quote")
+    if duration_quote and duration_quote not in raw_text:
+        errors.append(
+            f"CTL-QUOTE: project.activity_duration_hours.quote absente du texte source : {duration_quote!r}"
+        )
 
     for c in extraction.get("candidates", []):
         quote = c.get("quote")
@@ -194,36 +249,45 @@ def validate_extraction_contract(extraction: dict, raw_text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Etape STANDARDIZED -- mapping taxonomie (dev-brief.md 4.2)
+# Etape STANDARDIZED -- mapping taxonomie (dev-brief.md 4.2), revu par
+# impact-science.md : famille -> Areas (1 principale) -> RISE (si CI) -> ODD.
 # ---------------------------------------------------------------------------
 MAPPING_TOOL_NAME = "emit_mapping"
 
-MAPPING_SYSTEM_PROMPT = """Tu es le module de classement NEXUS (mapping taxonomie, dev-brief.md 4.2).
+# D-30/A3 : les heures de benevolat sont TOUJOURS synthetisees par le backend
+# (benevoles JCI x duree, cf confirm_service._build_resource_measurements),
+# jamais proposees comme un candidat numerique -- exclu de l'enum ci-dessous
+# pour que l'IA ne puisse plus jamais l'utiliser comme metric_code.
+_METRIC_CODE_EXCLUDED = {"VOLUNTEER_HOURS"}
 
-Tu recois le resultat d'une extraction (candidats chiffres + nom du projet) et tu dois :
+MAPPING_SYSTEM_PROMPT = """Tu es le module de classement NEXUS (mapping taxonomie, impact-science.md).
 
-1. Classer le PROJET sur trois axes INDEPENDANTS (aucun ne se deduit d'un autre) :
-   - area_of_opportunity (Axe A, domaine d'intervention) : 1 a n valeurs
-   - programme (Axe B) : 0 a n valeurs. "Aucun programme" (liste vide) est une reponse legitime ; ne force jamais RISE ou un autre programme si le texte ne l'evoque pas clairement.
-   - sdgs (Axe C, Objectifs de Developpement Durable) : 1 a n valeurs, dont EXACTEMENT une avec role="primary". Ne sur-etiquette pas : ne propose que les ODD clairement lies au texte.
-   - rise_pillars : uniquement si "RISE" figure dans programme ci-dessus, sinon liste vide.
-   - activity_type : deduit du texte, jamais une question posee a l'utilisateur (D-08).
+Tu recois le resultat d'une extraction (candidats chiffres + nom du projet) et tu dois classer le PROJET dans cet ordre EXACT (impact-science.md section 0) :
 
-2. Pour CHAQUE candidat chiffre recu, proposer :
-   - metric_code (dans le referentiel fourni, ou null si aucun ne convient -- ne jamais inventer un code hors liste)
-   - iaooi_value : INPUT (ressource mobilisee, ex. benevoles/heures), ACTIVITY (ce qui a ete fait), OUTPUT (ce qui a ete produit), OUTCOME (changement reel constate), IMPACT_CLAIM (revendication d'impact non mesuree), CONTEXT, ou UNCERTAIN si ambigu
+1. FAMILLE(S) D'ACTIVITE (`activity_families`, 1..n) : decrit LA FORME de l'action (former, debattre, planter, jumeler, sensibiliser...), jamais le theme (les ODD portent le theme). Choisis un ou plusieurs codes du referentiel fourni. Si aucun code ne convient, choisis le code *_OTHER (ou OTHER) de l'Area la plus proche et remplis `other_label` avec un libelle court et factuel -- jamais vide dans ce cas.
+
+2. AREA(S) DE JCI (`area_of_opportunity`, 1..n, EXACTEMENT UNE avec role="primary") : utilise les signaux d'inclusion/exclusion fournis dans le referentiel pour chaque Area (champ inclusion_signals/exclusion_signals/hard_rule). REGLE DURE, non negociable : si TOUS les candidats chiffres de type "beneficiaires/participants" sont internal_external="internal" (public exclusivement compose de membres JCI) ET qu'aucun n'est "external" ou "mixed", alors Community Impact (CI) NE DOIT JAMAIS etre propose, ni en principal ni en secondaire -- meme si l'activite ressemble a un projet communautaire. A l'inverse, des qu'un public externe ou mixte est implique dans une activite qui repond a un besoin de la communaute, CI doit etre propose (au moins en secondaire).
+
+3. RISE (`rise`) : NE REPONDS "yes" QUE SI Community Impact (CI) figure parmi les Areas retenues a l'etape 2 (principale ou secondaire). Si CI n'est pas retenu, `rise.status` DOIT etre "not_applicable" et `rise.pillars` une liste vide -- jamais "yes" sans CI. Si CI est retenu, decide "yes" seulement si le projet remplit reellement le critere d'au moins un pilier (utilise les inclusion_rule/exclusion_rule fournis pour chaque pilier) ; la simple presence du mot "RISE" dans le texte ne suffit PAS a elle seule. Si "yes", choisis 1 a 3 piliers, chacun justifie.
+
+4. ODD (`sdgs`, 1..n, SANS PLAFOND, EXACTEMENT UN avec role="primary") : ne propose QUE les ODD que tu peux justifier par une phrase concrete du texte. Un ODD que tu ne peux pas justifier n'est pas propose, quel que soit le nombre d'ODD deja retenus -- il n'y a pas de limite haute, seulement l'exigence de justification.
+
+Pour CHAQUE valeur des etapes 1, 2, 3 et 4 (chaque famille, chaque Area, chaque pilier RISE, chaque ODD), `justification` doit etre une phrase COURTE qui s'appuie sur le texte source (paraphrase ou courte citation) -- jamais une justification generique ou vide.
+
+5. Pour CHAQUE candidat chiffre recu (hors benevoles JCI et duree, qui ont deja leurs propres champs et ne sont pas des candidats), proposer :
+   - metric_code (dans le referentiel fourni, ou null si aucun ne convient -- ne jamais inventer un code hors liste). N'utilise JAMAIS VOLUNTEERS pour des benevoles/membres JCI (ce nombre est capture ailleurs) : VOLUNTEERS ne sert plus qu'a des benevoles EXTERNES (non-membres) eventuels, si le texte en mentionne explicitement.
+   - iaooi_value : INPUT (ressource mobilisee), ACTIVITY (ce qui a ete fait), OUTPUT (ce qui a ete produit), OUTCOME (changement reel constate), IMPACT_CLAIM (revendication d'impact non mesuree), CONTEXT, ou UNCERTAIN si ambigu
    - unit_code/unit_dimension (ex: person/count, hour/duration, view/count, percent/ratio)
    - count_type : direct (participation reelle), indirect, audience (touche mais pas participe), unique ou cumulative, unknown si non precise
    - internal_external : membres JCI (internal), public externe (external), les deux (mixed), ou unknown
    - dedup_basis, target_group[], source_wording_class (les mots employes par la source), definition (status specified/unknown + texte si donne)
 
-3. Proposer des relations[] entre candidats quand deux chiffres decrivent des etapes d'un meme entonnoir (funnel_stage), un sous-ensemble (subset_of), ou la meme population sous un angle different (same_population_different_metric).
+6. Proposer des relations[] entre candidats quand deux chiffres decrivent des etapes d'un meme entonnoir (funnel_stage), un sous-ensemble (subset_of), ou la meme population sous un angle different (same_population_different_metric).
 
 Regles :
 - Chaque code que tu utilises DOIT venir de la liste autorisee fournie dans le schema. N'invente jamais un code.
 - Un chiffre de communication (vues, followers, portee) n'est jamais compte comme des beneficiaires : count_type="audience", jamais confondu avec un metric_code de personnes formees.
 - Si le texte ne permet pas de trancher un champ, utilise "unknown" (jamais une valeur inventee par defaut).
-- Justifie chaque choix d'axe projet brievement (justification).
 
 Reponds UNIQUEMENT en appelant l'outil fourni."""
 
@@ -234,12 +298,14 @@ def build_mapping_schema(taxonomy_content: dict) -> dict:
     axes = taxonomy_content["classification_axes"]
     ml = taxonomy_content["measurement_layer"]
 
+    family_codes = _codes(axes["activity_family"])
     area_codes = _codes(axes["area_of_opportunity"])
-    programme_codes = _codes(axes["programme"])
     rise_pillar_codes = _codes(taxonomy_content["rise_pillars"])
-    metric_codes = _codes(ml["input_type"]) + _codes(ml["output_type"]) + _codes(ml["outcome_type"])
+    metric_codes = [
+        c for c in (_codes(ml["input_type"]) + _codes(ml["output_type"]) + _codes(ml["outcome_type"]))
+        if c not in _METRIC_CODE_EXCLUDED
+    ]
     target_group_codes = _codes(ml["target_group"])
-    activity_type_codes = _codes(ml["activity_type"])
 
     return {
         "type": "object",
@@ -247,60 +313,68 @@ def build_mapping_schema(taxonomy_content: dict) -> dict:
         "properties": {
             "project_classification": {
                 "type": "object",
-                "required": ["area_of_opportunity", "programme", "rise_pillars", "sdgs", "activity_type"],
+                "required": ["activity_families", "area_of_opportunity", "rise", "sdgs"],
                 "properties": {
+                    "activity_families": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "required": ["code", "confidence", "justification"],
+                            "properties": {
+                                "code": {"type": "string", "enum": family_codes},
+                                "other_label": {"type": ["string", "null"]},
+                                "confidence": {"type": "string", "enum": ["H", "M", "L"]},
+                                "justification": {"type": "string"},
+                            },
+                        },
+                    },
                     "area_of_opportunity": {
                         "type": "array",
+                        "minItems": 1,
                         "items": {
                             "type": "object",
-                            "required": ["code", "confidence", "justification"],
+                            "required": ["code", "role", "confidence", "justification"],
                             "properties": {
                                 "code": {"type": "string", "enum": area_codes},
+                                "role": {"type": "string", "enum": ["primary", "secondary"]},
                                 "confidence": {"type": "string", "enum": ["H", "M", "L"]},
                                 "justification": {"type": "string"},
                             },
                         },
                     },
-                    "programme": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["code", "confidence", "justification"],
-                            "properties": {
-                                "code": {"type": "string", "enum": programme_codes},
-                                "confidence": {"type": "string", "enum": ["H", "M", "L"]},
-                                "justification": {"type": "string"},
-                            },
-                        },
-                    },
-                    "rise_pillars": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["code", "confidence", "justification"],
-                            "properties": {
-                                "code": {"type": "string", "enum": rise_pillar_codes},
-                                "confidence": {"type": "string", "enum": ["H", "M", "L"]},
-                                "justification": {"type": "string"},
+                    "rise": {
+                        "type": "object",
+                        "required": ["status", "pillars"],
+                        "properties": {
+                            "status": {"type": "string", "enum": ["yes", "no", "not_applicable"]},
+                            "pillars": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": ["code", "confidence", "justification"],
+                                    "properties": {
+                                        "code": {"type": "string", "enum": rise_pillar_codes},
+                                        "confidence": {"type": "string", "enum": ["H", "M", "L"]},
+                                        "justification": {"type": "string"},
+                                    },
+                                },
                             },
                         },
                     },
                     "sdgs": {
                         "type": "array",
+                        "minItems": 1,
                         "items": {
                             "type": "object",
                             "required": ["goal", "role", "confidence", "justification"],
                             "properties": {
                                 "goal": {"type": "integer", "minimum": 1, "maximum": 17},
-                                "role": {"type": "string", "enum": ["primary", "secondary", "unknown"]},
+                                "role": {"type": "string", "enum": ["primary", "secondary"]},
                                 "confidence": {"type": "string", "enum": ["H", "M", "L"]},
                                 "justification": {"type": "string"},
                             },
                         },
-                    },
-                    "activity_type": {
-                        "type": "array",
-                        "items": {"type": "string", "enum": activity_type_codes},
                     },
                 },
             },
@@ -360,7 +434,11 @@ def build_mapping_schema(taxonomy_content: dict) -> dict:
 
 
 def map_standardized(extraction: dict, taxonomy_content: dict) -> dict[str, Any]:
-    """Etape STANDARDIZED (dev-brief.md 4.2). Appel reel a Claude Haiku 4.5."""
+    """Etape STANDARDIZED (dev-brief.md 4.2, impact-science.md). Appel reel a
+    Claude Haiku 4.5. Ajoute apres coup `activity_type` comme alias derive de
+    `activity_families` (compatibilite avec le code existant qui lirait
+    encore l'ancien champ, measurement_layer.activity_type -- jamais demande
+    deux fois au modele)."""
     client = _get_client()
     schema = build_mapping_schema(taxonomy_content)
     user_payload = {
@@ -380,45 +458,95 @@ def map_standardized(extraction: dict, taxonomy_content: dict) -> dict[str, Any]
         messages=[{"role": "user", "content": json.dumps(user_payload, ensure_ascii=False, indent=2)}],
     )
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    return dict(tool_use.input)
+    result = dict(tool_use.input)
+    pc = result.get("project_classification") or {}
+    pc["activity_type"] = [af.get("code") for af in pc.get("activity_families", []) if af.get("code")]
+    return result
 
 
 def validate_mapping_contract(mapping: dict, taxonomy_content: dict) -> list[str]:
-    """CTL-TAXO (chaque code existe dans le referentiel), R5 (1 seul SDG
-    primary), CTL-AXES (partiel : rise_pillars implique RISE dans programme)."""
+    """CTL-TAXO (chaque code existe dans le referentiel), R5/D-27 (1 seul SDG
+    primary), R2/D-26 (1 seule Area primary), D-24 (RISE seulement si CI),
+    D-25 (AUTRE => libelle), et un garde-fou best-effort sur la regle dure
+    "public 100% interne => jamais CI" (l'enforcement definitif, sur la
+    population CONFIRMEE par le SG, est fait a la confirmation -- A5)."""
     errors: list[str] = []
     axes = taxonomy_content["classification_axes"]
     ml = taxonomy_content["measurement_layer"]
 
     allowed = {
+        "activity_family": set(_codes(axes["activity_family"])),
         "area_of_opportunity": set(_codes(axes["area_of_opportunity"])),
-        "programme": set(_codes(axes["programme"])),
         "rise_pillars": set(_codes(taxonomy_content["rise_pillars"])),
-        "metric_code": set(_codes(ml["input_type"]) + _codes(ml["output_type"]) + _codes(ml["outcome_type"])),
+        "metric_code": set(
+            c for c in (_codes(ml["input_type"]) + _codes(ml["output_type"]) + _codes(ml["outcome_type"]))
+            if c not in _METRIC_CODE_EXCLUDED
+        ),
         "target_group": set(_codes(ml["target_group"])),
-        "activity_type": set(_codes(ml["activity_type"])),
     }
 
     pc = mapping.get("project_classification") or {}
-    for item in pc.get("area_of_opportunity", []):
+
+    families = pc.get("activity_families", [])
+    if not families:
+        errors.append("R-A4: activity_families : au moins une famille d'activite est requise (D-25)")
+    for item in families:
+        code = item.get("code")
+        if code not in allowed["activity_family"]:
+            errors.append(f"CTL-TAXO: activity_families code inconnu : {code!r}")
+        elif (code.endswith("_OTHER") or code == "OTHER") and not (item.get("other_label") or "").strip():
+            errors.append(f"D-25: activity_families {code!r} choisi sans other_label (libelle obligatoire)")
+
+    areas = pc.get("area_of_opportunity", [])
+    if not areas:
+        errors.append("R2: area_of_opportunity : au moins un domaine d'intervention est requis")
+    for item in areas:
         if item.get("code") not in allowed["area_of_opportunity"]:
             errors.append(f"CTL-TAXO: area_of_opportunity code inconnu : {item.get('code')!r}")
-    for item in pc.get("programme", []):
-        if item.get("code") not in allowed["programme"]:
-            errors.append(f"CTL-TAXO: programme code inconnu : {item.get('code')!r}")
-    for item in pc.get("rise_pillars", []):
+    primary_areas = [a for a in areas if a.get("role") == "primary"]
+    if areas and len(primary_areas) != 1:
+        errors.append(f"D-26: exactement 1 Area 'primary' attendue, {len(primary_areas)} trouvee(s)")
+
+    area_codes_chosen = {a.get("code") for a in areas}
+    rise = pc.get("rise") or {}
+    rise_status = rise.get("status")
+    rise_pillars = rise.get("pillars", [])
+    if rise_status not in ("yes", "no", "not_applicable"):
+        errors.append(f"D-24: rise.status invalide : {rise_status!r}")
+    if rise_status == "yes" and "CI" not in area_codes_chosen:
+        errors.append("D-24: rise.status='yes' propose sans Community Impact (CI) parmi les Areas")
+    if rise_status == "yes" and not rise_pillars:
+        errors.append("D-24: rise.status='yes' requiert au moins un pilier")
+    if rise_status != "yes" and rise_pillars:
+        errors.append("D-24: des piliers RISE sont proposes alors que rise.status != 'yes'")
+    for item in rise_pillars:
         if item.get("code") not in allowed["rise_pillars"]:
-            errors.append(f"CTL-TAXO: rise_pillars code inconnu : {item.get('code')!r}")
-    for item in pc.get("sdgs", []):
+            errors.append(f"CTL-TAXO: rise pillar code inconnu : {item.get('code')!r}")
+
+    sdgs = pc.get("sdgs", [])
+    if not sdgs:
+        errors.append("R5/D-27: sdgs : au moins un ODD est requis")
+    for item in sdgs:
         goal = item.get("goal")
         if not isinstance(goal, int) or not (1 <= goal <= 17):
             errors.append(f"CTL-TAXO: sdg goal hors 1..17 : {goal!r}")
-    primary_count = sum(1 for s in pc.get("sdgs", []) if s.get("role") == "primary")
-    if primary_count != 1:
-        errors.append(f"R5: exactement 1 SDG primary attendu, {primary_count} trouve(s)")
-    for code in pc.get("activity_type", []):
-        if code not in allowed["activity_type"]:
-            errors.append(f"CTL-TAXO: activity_type code inconnu : {code!r}")
+        if not (item.get("justification") or "").strip():
+            errors.append(f"D-27: sdg {goal!r} sans justification (obligatoire pour tout ODD retenu)")
+    primary_count = sum(1 for s in sdgs if s.get("role") == "primary")
+    if sdgs and primary_count != 1:
+        errors.append(f"D-27: exactement 1 SDG primary attendu, {primary_count} trouve(s)")
+
+    # Garde-fou best-effort (RI-10) : si TOUS les candidats "population" connus
+    # sont internes et qu'aucun n'est externe/mixte, CI ne doit pas etre
+    # propose. Ne bloque pas si aucun candidat n'a de internal_external connu
+    # (signal insuffisant pour trancher au niveau du pipeline).
+    ies = [cm.get("internal_external") for cm in mapping.get("candidate_mappings", [])]
+    known_ies = [ie for ie in ies if ie in ("internal", "external", "mixed")]
+    if known_ies and all(ie == "internal" for ie in known_ies) and "CI" in area_codes_chosen:
+        errors.append(
+            "D-26: Community Impact propose alors que tous les candidats connus sont "
+            "internal_external='internal' (public 100% membres JCI => jamais CI)"
+        )
 
     for cm in mapping.get("candidate_mappings", []):
         mc = cm.get("metric_code")
@@ -427,9 +555,5 @@ def validate_mapping_contract(mapping: dict, taxonomy_content: dict) -> list[str
         for tg in cm.get("target_group", []):
             if tg not in allowed["target_group"]:
                 errors.append(f"CTL-TAXO: target_group inconnu pour {cm.get('candidate_id')} : {tg!r}")
-
-    programme_codes_chosen = {p.get("code") for p in pc.get("programme", [])}
-    if pc.get("rise_pillars") and "RISE" not in programme_codes_chosen:
-        errors.append("CTL-AXES: rise_pillars renseigne sans RISE dans programme")
 
     return errors
