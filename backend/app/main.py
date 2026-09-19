@@ -61,3 +61,46 @@ def _seed_demo_account_if_needed() -> None:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/admin/debug-seed")
+def debug_seed():
+    """Diagnostic temporaire (deploiement hackathon) : verifie/cree le compte
+    demo et remonte l'erreur exacte si ca echoue, sans avoir besoin d'acceder
+    aux logs Render. A retirer une fois le socle production stabilise."""
+    from app import models
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        existing_org = db.get(models.Organization, "DEMO-OL")
+        existing_user = db.get(models.AppUser, "DEMO-USER")
+        created = []
+        if not existing_org:
+            db.add(models.Organization(
+                organization_id="DEMO-OL",
+                org_type="local",
+                name="OL Demo (a remplacer par un vrai compte, Phase 4)",
+                country_iso2=None,
+            ))
+            created.append("organization")
+        if not existing_user:
+            db.add(models.AppUser(
+                user_id="DEMO-USER",
+                organization_id="DEMO-OL",
+                role="admin_ol",
+            ))
+            created.append("app_user")
+        db.commit()
+        return {
+            "already_existed": {
+                "organization": bool(existing_org),
+                "app_user": bool(existing_user),
+            },
+            "created": created,
+        }
+    except Exception as exc:
+        db.rollback()
+        return {"error": str(exc)}
+    finally:
+        db.close()
