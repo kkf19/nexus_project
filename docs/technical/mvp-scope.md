@@ -15,7 +15,7 @@
 | D-04 | La saisie se fait en **texte libre**, jamais par formulaire vide. Le système extrait, puis fait confirmer | **ACCEPTED** |
 | D-05 | 13 champs canoniques (§3), pas 45 | **ACCEPTED** |
 | D-06 | Aucune nouvelle vague d'analyse (pas de « Tier 3 ») | **ACCEPTED** |
-| D-07 | **Les trois axes de classification JCI sont indépendants** : domaine d'intervention, programme, ODD. Aucun n'est emboîté dans un autre. Remplace la structure hiérarchique de `taxonomy.config.json` v0.1.0 | **ACCEPTED** |
+| D-07 | **Les trois axes de classification JCI sont indépendants** : domaine d'intervention, programme, ODD. Aucun n'est emboîté dans un autre. Remplace la structure hiérarchique de `taxonomy.config.json` v0.1.0 | **ACCEPTED** — **SUPERSEDED** sur l'axe Programme par D-23 / D-24 (2026-09-19) |
 | D-08 | La couche de mesure NEXUS est allégée pour le MVP : type de production et type de résultat actifs en entier ; groupe cible réduit à l'axe interne/externe ; type d'activité déduit sans liste imposée ; type d'impact désactivé | **ACCEPTED** |
 | D-09 | **Aucune cible, aucun objectif, aucune trajectoire** n'est fixé, proposé ou affiché par NEXUS, y compris pour RISE (le 53,47 % est un constat). Voir §3 « Limite explicite » | **ACCEPTED** |
 | D-10 | Deux codes de ressources ajoutés à la couche de mesure (`input_type`) : `VOLUNTEERS` (person) et `VOLUNTEER_HOURS` (hour). Codes PROPOSED_STANDARD, pas JCI. Pas de code générique `BENEFICIARIES` | **ACCEPTED** |
@@ -31,6 +31,15 @@
 | D-20 | Champ #12 à trois états (`outcome_status`) : `measured` (résultat concret chiffré déclaré) / `pending_follow_up` (effet attendu + date de suivi ; la réponse crée une nouvelle mesure) / `none` (activité réelle sans effet mesurable visé). Aucun des deux derniers ne crée de valeur 0. Relance automatique post-MVP | **ACCEPTED** (PO, 2026-09-18) |
 | D-21 | Niveau de preuve obligatoire sur chaque résultat (« comment le sais-tu ? ») | **REJECTED** (PO, 2026-09-18) — la validation par l'organisation nationale suffit pour le MVP. Réouvrable après le hackathon |
 | D-22 | **Vocabulaire de présentation** : dans les dashboards et le pitch, les résultats sont présentés sous le libellé « Impact », comme le fait JCI. Le modèle de données conserve inchangée la distinction INPUT / OUTPUT / OUTCOME. Garde-fou : les ressources (bénévoles, heures) et la portée de communication (vues, followers) ne sont **jamais** affichées sous « Impact » | **ACCEPTED** (PO, 2026-09-18) — garde-fou proposé par le Product Architect, à confirmer |
+| D-23 | **Les programmes JCI sont des activités** : ils se rangent dans une famille d'activité, comme toute activité locale équivalente. L'axe Programme est supprimé ; pas de champ « programme officiel ». Voir `impact-science.md` | **ACCEPTED** (PO, 2026-09-19) — supersède D-07 (axe B) |
+| D-24 | **RISE = sous-classification de Community Impact** : question oui/non posée seulement si CI figure parmi les Areas (principale ou secondaire) ; 1 à 3 piliers si oui. Le dashboard affiche deux ratios (base CI / base tous projets). JCI applique RISE à tous les projets (p.85 vs p.86) → conflit documentaire DQC-27 | **ACCEPTED** (PO, 2026-09-19) |
+| D-25 | **Famille d'activité = 1ʳᵉ dimension** : liste canonique v1, 1..n par projet, AUTRE + libellé libre, confirmée par l'OL, affichée au dashboard | **ACCEPTED** (PO, 2026-09-19) — supersède D-08 sur `activity_type` |
+| D-26 | Areas 1..n, **exactement 1 principale**. Public 100 % membres JCI ⇒ jamais CI. Hors ID/BE/IC ⇒ CI. Activité ouverte au public externe ⇒ CI au moins en secondaire | **ACCEPTED** (PO, 2026-09-19) |
+| D-27 | ODD 1..n **sans plafond**, exactement 1 principal, une phrase de justification par ODD | **ACCEPTED** (PO, 2026-09-19) — remplace R5 (plafond recommandé) |
+| D-28 | **Tout ce que le dashboard affiche est obligatoire sur la page de validation**, prérempli ou à renseigner (18 champs, `impact-science.md` §6). Durée de l'activité et bénévoles JCI deviennent bloquants | **ACCEPTED** (PO, 2026-09-19) — remplace D-16 et la liste C1–C8 de D-17 |
+| D-29 | Dashboard : deux lectures (fait / changé), un bloc par Area, projets uniques au global, somme des blocs jamais affichée | **ACCEPTED** (PO, 2026-09-19) |
+| D-30 | Heures de bénévolat **pré-calculées** = bénévoles JCI × durée, marquées `calculated` avec formule, corrigeables par le SG | **ACCEPTED** (PO, 2026-09-19) — supersède la note « jamais recalculé » de `input_type.VOLUNTEER_HOURS` |
+| D-31 | 1 saisie = 1 projet pour le MVP ; entité Activité et budget reportés | **ACCEPTED** (PO, 2026-09-19) |
 
 D-09 : numérotation d'une décision déjà actée en §3, sans changement de fond. D-10 à D-16 : arbitrages du Product Owner du 2026-09-18 (soir) sur les points ouverts de `dev-brief.md` (O-02, O-03, O-04, O-06, O-07, O-08, O-10).
 

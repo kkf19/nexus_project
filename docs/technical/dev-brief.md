@@ -1,5 +1,7 @@
 # NEXUS — Brief de développement du MVP
 
+> **Mise à jour 2026-09-19 (soir)** : la classification et la page de validation suivent désormais `impact-science.md` (décisions D-23 à D-31 de `mvp-scope.md`). En cas de contradiction avec une section de ce brief, **`impact-science.md` prévaut**. Critères d'acceptation : **AC-01 à AC-31** (AC-16, AC-17 et RI-10 réécrits ; AC-23 à AC-31 ajoutés).
+
 **Statut** : référence de construction pour l'équipe de développement · 2026-09-18
 **Remplace, pour l'équipe de dev** : la lecture de Tier 1, de Tier 2, de `data-model.md` et de `measurement-object.md`. Ce document se suffit à lui-même ; les fichiers cités en §8 sont à **brancher**, pas à relire.
 **Décisions appliquées** : D-01 à D-16, toutes consignées dans `mvp-scope.md` §1 et repérées `[D-xx]` dans le texte. D-10 à D-16 sont les arbitrages du Product Owner du 18/09 au soir (Annexe C).
@@ -434,7 +436,7 @@ Chaque règle est associée à un contrôle nommé. Les contrôles V*n*, E*n* et
 | RI-07 | **Le texte brut saisi n'est jamais modifié** | Correction d'une faute dans `raw_text` | Aucune route de mise à jour · CTL-RAW : `sha256(raw_text)` = `raw_text_sha256` à chaque lecture de traçabilité |
 | RI-08 | **Tout fait cite sa source** (P1/P9) | MO local sans `source.quote` (BAD-06) ; citation reformulée | Schéma « P1/P9 » · **V2** · CTL-QUOTE : `source_quote` est une sous-chaîne de `raw_text` |
 | RI-09 | **Un calcul n'est jamais officiel** (P2) | Somme d'abonnés stockée en `OFFICIAL_JCI_FACT` (BAD-02) | Schéma « P2 » · **V4** · **V10** |
-| RI-10 | **Les trois axes sont indépendants** (R3, `[D-07]`) | Projet RISE classé automatiquement `CI` | CTL-AXES : aucune dérivation d'un axe n'a un autre axe dans ses `input_refs` · test AC-17 |
+| RI-10 | **Programmes = activités ; RISE seulement sous Community Impact** (`[D-23]`, `[D-24]`, remplace l'ancienne règle « trois axes indépendants » de D-07) | Projet réservé aux membres classé `CI` ; RISE proposé sur un projet sans `CI` | Validation : `rise_status = not_applicable` si `CI` ∉ Areas ; public 100 % interne ⇒ `CI` refusé · tests AC-17, AC-24, AC-25 |
 | RI-11 | **Pas de ratio sans base** (DQC-12/13) | « 75 % placés » sans effectif (BAD-04) | Schéma « Ratio without a base is meaningless » |
 | RI-12 | **Pas de clé `area` nue** (P7) | `{"area": "AFME"}` | **V9** · schéma `geography.additionalProperties = false` |
 | RI-13 | **Aucune cible, aucun objectif** `[D-09]` | Colonne `target`, barre « 53 % / objectif 60 % » | CTL-NOTARGET : aucun identifiant `target`, `goal_value` ou `objective` dans le schéma de base ni dans l'API (vérification statique en CI) |
@@ -464,13 +466,22 @@ Les commandes supposent l'arborescence du dépôt. « Moteur démo » désigne `
 | AC-13 | Une `submission` existante | Tentative de modification de `raw_text` par l'API | Refus (aucune route) ; empreinte inchangée |
 | AC-14 | `BAD-02`, `BAD-05`, `BAD-06` | Le validateur s'exécute | Les trois sont rejetés, pour les motifs P2, refus sans raison et P1 |
 | AC-15 | Les 5 objets `valid` de `measurement-object.examples.json` | Insertion en base puis réexport en MO | Réexport **identique** à l'original, clés `_` exclues (comparaison profonde), et le validateur passe |
-| AC-16 | Fiche de confirmation avec C1, C2, C3 ou C4 non traitée | Clic sur « Confirmer la fiche » | Bouton inactif ; rien n'est écrit |
-| AC-17 | Un texte décrivant une formation au leadership dans le cadre de JCI RISE | Étape 3 | `programme` contient `RISE`, et `area_of_opportunity` est proposé à partir du texte. Retirer `RISE` à la confirmation **ne modifie pas** l'axe A. CTL-AXES passe |
+| AC-16 | Fiche de confirmation avec un des 18 champs obligatoires de `impact-science.md` §6 vide (ex. durée de l'activité, nombre de membres JCI bénévoles) `[D-28]` | Clic sur « Soumettre » ou appel direct à l'API de confirmation | Bouton inactif ; l'API répond 422 en nommant le champ ; rien n'est écrit. `0` saisi explicitement est accepté, un champ vide ne l'est jamais |
+| AC-17 | (a) « Formation au leadership de 80 membres pendant le congrès national » ; (b) « Formation de 100 jeunes sans emploi + mise en relation avec des employeurs » `[D-24]` | Étape 3 puis confirmation | (a) `CI` non proposé, `rise_status = not_applicable`, bloc RISE masqué. (b) `CI` proposé, `rise_status = yes`, pilier `WORKFORCE`. Décocher `CI` sur (b) remet `rise_status = not_applicable` et efface les piliers |
 | AC-18 | Le SG choisit « pas encore mesurable » ou « aucun effet mesurable visé » | Confirmation | `outcome_status ∈ {pending_follow_up, none}` ; si `pending_follow_up`, `expected_outcome` et `follow_up_date` non nuls ; **aucune** ligne `measurement` `OUTCOME` avec valeur 0 |
 | AC-19 | Les trois vues du tableau de bord | Affichage | Aucun élément de cible ou d'objectif (CTL-NOTARGET) ; toute valeur `NULL` s'affiche « inconnu » |
 | AC-20 | `demo_measurements.json` chargé en base | Le système calcule `agg_equivalence_key` avant validation | Les 11 objets passent le validateur (vérifié : sans clé calculée, 9 objets échouent) |
 | AC-21 | Deux MO en `percent` de même clé (par exemple deux « taux d'insertion » avec leur base) | Le moteur s'exécute | Aucun agrégat produit ; deux lignes `refusal` `SEMANTIC_NON_EQUIVALENCE` avec le détail « unité non additive : percent (D-13) » ; les deux taux restent visibles par projet |
 | AC-22 | Une saisie avec dates (« du 3 au 5 septembre ») et une autre sans date, même année, même métrique | Étapes 1 à 4 | Les deux MO ont `period_type = reporting_year` et la même clé ; les dates de la première sont conservées `[D-11]` |
+| AC-23 | Les 9 textes de référence T1–T9 (`impact-science.md` §3) `[D-25]` `[D-26]` | Étapes 1 à 3 | Pour chacun : familles attendues présentes, Area principale attendue, `rise_status` attendu, ODD principal parmi ceux du tableau. Chaque valeur proposée porte une phrase justificative citée du texte |
+| AC-24 | Un texte dont le public est 100 % membres JCI (T3, T5) | Étape 3, puis tentative de confirmer avec `CI` coché | L'IA ne propose pas `CI` ; l'API refuse la confirmation « public interne ⇒ Community Impact impossible (D-26) » |
+| AC-25 | Tentatives de confirmation incohérentes sur RISE | API de confirmation | Refus si `rise_status = yes` sans `CI` ; refus si `rise_status = yes` sans pilier ; refus si `CI` coché et `rise_status` vide |
+| AC-26 | Areas avec 0 ou 2 Areas `primary` | API de confirmation | Refus ; exactement 1 `primary` exigé |
+| AC-27 | Famille `*_OTHER` ou `OTHER` sans libellé | API de confirmation | Refus ; libellé libre obligatoire |
+| AC-28 | 5 ODD cochés, dont 1 principal, chacun justifié `[D-27]` | Confirmation | Accepté (aucun plafond). 0 ou 2 principaux ⇒ refus |
+| AC-29 | 12 membres JCI bénévoles, durée 3 h `[D-30]` | Page de confirmation | Heures préremplies à 36, étiquette « calculé » ; ligne `derivation` avec la formule `VOLUNTEERS × activity_duration_hours`. Si le SG corrige à 50 : valeur stockée 50, origine `reported`, la dérivation n'est plus appliquée |
+| AC-30 | Public mixte : 30 membres + 45 externes | Confirmation puis moteur | Deux mesures distinctes (`internal` / `external`) ; aucun agrégat ne vaut 75 ; « Personnes touchées — public externe » vaut 45 |
+| AC-31 | Un projet BE (principale) + CI (secondaire) `[D-29]` | Tableau de bord | Il apparaît dans les blocs BE et CI (mention « Area secondaire ») ; la vue d'ensemble le compte une seule fois ; aucune somme des 4 blocs n'est affichée ; RISE affiché avec deux ratios étiquetés (base CI / base tous projets) |
 
 ---
 
