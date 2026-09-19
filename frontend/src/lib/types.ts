@@ -250,6 +250,7 @@ export interface QualityIssue {
     value_qualifier?: string;
     unit?: string;
     layer: string;
+    formula?: string;
     source?: { document?: string; page?: string; section?: string; quote?: string };
   }[];
   resolution_status: string;

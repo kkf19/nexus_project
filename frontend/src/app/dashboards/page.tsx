@@ -238,9 +238,15 @@ export default function DashboardsPage() {
                             {v.value_qualifier === "at_least" ? "≥ " : ""}
                             {v.value.toLocaleString("fr-FR")} {v.unit}
                           </span>{" "}
-                          — {v.source?.document} ({v.source?.section}
-                          {v.source?.page ? `, p.${v.source.page}` : ""})
-                          {v.source?.quote && <span> — « {v.source.quote} »</span>}
+                          {v.source?.document ? (
+                            <>
+                              — {v.source.document} ({v.source.section}
+                              {v.source.page ? `, p.${v.source.page}` : ""})
+                              {v.source.quote && <span> — « {v.source.quote} »</span>}
+                            </>
+                          ) : v.formula ? (
+                            <span>— calculé : {v.formula}</span>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
