@@ -1,9 +1,9 @@
 {
   "meta": {
     "title": "NEXUS Taxonomy Configuration",
-    "version": "0.2.2",
+    "version": "0.3.0",
     "standard_version": "PROPOSED_STANDARD:NEXUS-TAXONOMY-v0",
-    "status": "ACCEPTED — trois axes indépendants (2026-09-18) ; v0.2.1 : input_type (D-10) ; v0.2.2 : target_group simplifié (D-19), statut des résultats (D-20), zone géographique issue du profil OL (D-18)",
+    "status": "ACCEPTED — v0.3.0 (2026-09-19) : classification revue selon impact-science.md (D-23 a D-31). Programme n'est plus un axe independant (D-23) ; RISE devient une sous-classification de Community Impact (D-24) ; nouvel axe activity_family, 1ere dimension de classification (D-25) ; role primary/secondary sur les Areas (D-26) ; ODD sans plafond (D-27).",
     "supersedes": "0.1.0-draft (structure hiérarchique L1→L8, où le programme était emboîté dans le domaine d'intervention)",
     "derived_from": [
       "Tier 1 §A (vocabulaire officiel JCI), §C (taxonomie), §P (modèle de provenance)",
@@ -30,6 +30,10 @@
       {
         "version": "0.2.2",
         "change": "D-19 : target_group réduit à 6 familles + OTHER (libellé libre conservé), jamais bloquant, hors clé d'équivalence ; table de correspondance depuis les 12 anciens codes. D-20 : measurement_layer.outcome_status (measured / pending_follow_up / none). D-18 : geographic_area déclarée dans le profil de l'OL à la création du compte."
+      },
+      {
+        "version": "0.3.0",
+        "change": "D-23/D-24/D-25/D-26/D-27 : ajout de classification_axes.activity_family (1ere dimension, remplace measurement_layer.activity_type qui devient un alias deprecie) ; classification_axes.programme marque DEPRECATED (non supprime) ; RISE deplace sous Community Impact (rise imbrique dans area_of_opportunity.values[CI]), avec les libelles du site JCI et des criteres d'inclusion/exclusion par pilier ; ajout des definitions officielles JCI (jci.cc/what-we-do) et des signaux d'inclusion/exclusion par Area, dont la regle dure 'public 100% interne => jamais CI' ; ODD : suppression de la recommandation de plafond (remplacee par une justification obligatoire par ODD retenu). Pas de champ 'programme officiel JCI' sur le projet : seule une liste informative jci_programme_examples est ajoutee sur chaque famille d'activite, a titre documentaire."
       }
     ]
   },
@@ -59,7 +63,10 @@
             8,
             9,
             12
-          ]
+          ],
+          "definition_official_site": "JCI empowers young leaders to innovate, grow, and succeed in the dynamic world of business and entrepreneurship. (source : jci.cc/what-we-do, consulte le 2026-09-19)",
+          "inclusion_signals": "L'activite vise la creation, la croissance ou la mise en relation d'entreprises ou d'entrepreneurs.",
+          "exclusion_signals": "La simple presence de sponsors ou de partenaires prives ne suffit pas."
         },
         {
           "code": "ID",
@@ -69,7 +76,10 @@
             4,
             5,
             10
-          ]
+          ],
+          "definition_official_site": "JCI offers diverse opportunities for growth through training, masterclasses, workshops, and online courses. (source : jci.cc/what-we-do, consulte le 2026-09-19)",
+          "inclusion_signals": "L'activite developpe les competences, la confiance ou le leadership de personnes : formation, debat, prise de parole, mentorat, academie.",
+          "exclusion_signals": "Le developpement de competences n'est qu'un moyen accessoire d'une action communautaire (ex. 10 benevoles brieves avant une plantation) : ne pas retenir ID pour ce seul motif."
         },
         {
           "code": "IC",
@@ -78,7 +88,10 @@
           "typical_sdgs": [
             16,
             17
-          ]
+          ],
+          "definition_official_site": "JCI's global events foster leadership and cross-border collaboration. (source : jci.cc/what-we-do, consulte le 2026-09-19)",
+          "inclusion_signals": "L'activite implique au moins deux pays : jumelage, evenement multi-pays, projet ou echange transfrontalier.",
+          "exclusion_signals": "Un evenement national qui a quelques invites etrangers sans collaboration reelle ne suffit pas."
         },
         {
           "code": "CI",
@@ -95,14 +108,59 @@
             11,
             12,
             13
-          ]
+          ],
+          "definition_official_site": "JCI equips members with tools and resources to lead impactful projects that address community needs. (source : jci.cc/what-we-do, consulte le 2026-09-19)",
+          "inclusion_signals": "Le public beneficiaire est externe (non-membres, ou public ouvert a tous) ET l'activite repond a un besoin de la communaute.",
+          "exclusion_signals": "Le public est exclusivement compose de membres JCI : formations de congres, formations officielles internes, academies internes, jumelages, CAMO, congres mondial.",
+          "hard_rule": "D-26 — REGLE DURE, non contournable par l'IA ni a la confirmation : public 100% membres JCI (interne) => Community Impact ne peut JAMAIS etre retenu, ni en principale ni en secondaire. A l'inverse, une activite ouverte a un public externe et repondant a un besoin communautaire => CI au moins en secondaire.",
+          "rise": {
+            "note": "D-24 — sous-classification de CI uniquement. Question oui/non posee SEULEMENT si CI figure parmi les Areas retenues du projet (principale ou secondaire). Si oui : choisir 1 a 3 piliers, chacun justifie par une phrase du texte. La simple presence du mot 'RISE' dans le texte ne suffit pas ; confirmation humaine obligatoire (D-16/D-28). Affichage : 'Aligne RISE — confirme par l'OL'.",
+            "definition_official": "JCI RISE (Rebuild, Invest, Sustain, Evolve) is JCI's flagship initiative addressing economic recovery, workforce empowerment, and mental health. [p.85]",
+            "values": [
+              {
+                "code": "REBUILD_ECONOMIES",
+                "label": "Sustaining and rebuilding economies",
+                "report_variant_labels": [
+                  "Sustaining and Rebuilding Economies",
+                  "Sustain and Rebuild Economies"
+                ],
+                "inclusion_rule": "Soutien direct a des entreprises, entrepreneurs, PME, activites generatrices de revenus. Rapport p.85 : 'Support businesses, entrepreneurs, and SMEs'.",
+                "exclusion_rule": "Collecte de fonds caritative sans dimension economique.",
+                "published_share_2025": 0.403
+              },
+              {
+                "code": "WORKFORCE",
+                "label": "Motivating the workforce",
+                "report_variant_labels": [
+                  "Workforce Motivation",
+                  "Workforce Empowerment"
+                ],
+                "inclusion_rule": "Employabilite, competences professionnelles, insertion, placement, motivation des travailleurs.",
+                "exclusion_rule": "Formation scolaire generale sans visee professionnelle.",
+                "published_share_2025": 0.3167
+              },
+              {
+                "code": "MENTAL_HEALTH",
+                "label": "Preserving mental health and well-being",
+                "report_variant_labels": [
+                  "Preserving Mental Health",
+                  "Mental Health Awareness"
+                ],
+                "inclusion_rule": "Sante mentale, bien-etre psychologique, stress, soutien psychosocial.",
+                "exclusion_rule": "Sante physique seule (depistage, don de sang) => non RISE.",
+                "published_share_2025": 0.2804
+              }
+            ],
+            "conflict": "DQC-27 — JCI applique RISE a tous les projets (p.85, 53.47%) alors que Community Impact ne fait que 44.64% (p.86) ; NEXUS ne tranche pas ce conflit documentaire, il applique la regle D-24 en interne."
+          }
         }
       ],
       "notes": [
         "Aucun domaine « environnement » n'existe. Les projets environnementaux relèvent généralement de CI via les ODD 12/13 (SEMANTIC_INTERPRETATION).",
         "Les ODD 6, 7, 14 et 15 ne sont associés par défaut à aucun domaine dans la source.",
         "typical_sdgs est une association publiée p.24-25, PAS une règle de déduction automatique : les ODD d'un projet se déclarent sur l'axe C."
-      ]
+      ],
+      "primary_secondary_rule": "D-26 : chaque projet porte 1..n Areas dont EXACTEMENT une 'primary' (l'objectif premier du projet) ; les autres retenues sont 'secondary'."
     },
     "programme": {
       "axis": "B — Programme",
@@ -363,22 +421,403 @@
           "GYD",
           "RISE_TO_THE_CHALLENGE"
         ]
-      }
+      },
+      "status": "DEPRECATED",
+      "deprecated_by": "D-23 (2026-09-19), voir impact-science.md",
+      "deprecated_note": "Le programme n'est plus un axe de classification independant. Les programmes JCI (CYE, Twinning, Public Speaking Competition...) sont desormais des ACTIVITES : ils se rangent dans classification_axes.activity_family, dont chaque famille porte a titre documentaire une liste jci_programme_examples. Il n'existe PAS de champ 'programme officiel JCI' saisi ou confirme sur le projet (decision explicite du PO, 2026-09-19). Cet axe et la table project_programme restent en base pour compatibilite historique mais ne sont plus alimentes par le pipeline IA a partir de v0.3.0. RISE, qui figurait ici, est deplace sous Community Impact (voir area_of_opportunity.values[CI].rise)."
     },
     "sdg": {
       "axis": "C — Objectifs de Développement Durable",
       "layer": "OFFICIAL_JCI_FACT",
       "count": 17,
       "source": "p.24-26, 84, 87-90",
-      "cardinality": "1..n par projet, dont exactement 1 principal",
+      "cardinality": "1..n par projet, SANS PLAFOND (D-27), dont exactement 1 principal",
       "roles": [
         "primary",
         "secondary"
       ],
       "role_evidence": "« Primary SDGs Addressed / Secondary SDG » [p.84]",
       "commitment_2026": "« Every local project will align with one or more SDGs and report measurable results » [p.132 — Road Map for 2026]",
-      "over_tagging_warning": "DQC-22 — le projet « SDGs Hunt » déclare les 17 ODD (l'ODD 11 deux fois) pour 4 heures de bénévolat et 5 bénévoles [p.89]. Un plafond sur le nombre d'ODD secondaires est un contrôle recommandé.",
-      "label_note": "Libellés courts de l'ONU tels qu'employés par JCI. La casse varie dans la source (« Zero hunger », « Gender equality ») : ne pas traiter une différence de casse comme une valeur distincte."
+      "over_tagging_warning": "DQC-22 — le projet 'SDGs Hunt' declare les 17 ODD (l'ODD 11 deux fois) pour 4 heures de benevolat et 5 benevoles [p.89]. D-27 (2026-09-19) : PAS de plafond numerique — le garde-fou contre le sur-etiquetage est desormais qu'un ODD non justifie par une phrase citee du texte source n'est jamais propose par l'IA. Remplace la recommandation anterieure de plafond.",
+      "label_note": "Libellés courts de l'ONU tels qu'employés par JCI. La casse varie dans la source (« Zero hunger », « Gender equality ») : ne pas traiter une différence de casse comme une valeur distincte.",
+      "justification_required": true
+    },
+    "activity_family": {
+      "axis": "1 — Famille d'activite (D-25)",
+      "layer_values": "PROPOSED_STANDARD (NEXUS), sauf jci_programme_examples qui est OFFICIAL_JCI_FACT",
+      "layer_codes": "PROPOSED_STANDARD",
+      "cardinality": "1..n par projet",
+      "principle": "Decrit LA FORME de l'action (former, debattre, concourir, planter, sensibiliser, jumeler...), jamais le theme (porte par les ODD). home_area est une SUGGESTION pour l'IA, jamais une regle d'heritage : l'Area du projet se decide independamment (axe area_of_opportunity). Chaque Area possede un code *_OTHER (ou OTHER) avec un libelle libre obligatoire.",
+      "official_programme_field": "Il n'existe PAS de champ 'programme officiel JCI' saisi ou confirme sur le projet. jci_programme_examples est une metadonnee INFORMATIVE portee par chaque famille dans ce referentiel (quels programmes JCI relevent typiquement de cette famille), jamais une question posee au SG ni une valeur stockee sur le projet.",
+      "excluded_from_reporting": "L'administration interne (assemblee generale, elections, reunion de bureau) n'est pas une famille d'activite : ce n'est pas un projet de reporting d'impact.",
+      "values": [
+        {
+          "code": "TRAINING_WORKSHOP",
+          "label": "Formation / atelier",
+          "definition": "Session d'apprentissage ponctuelle (quelques heures a quelques jours)",
+          "examples": [
+            "atelier leadership",
+            "formation gestion du temps",
+            "seminaire"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "Trainings at Area Conferences & World Congress"
+          ]
+        },
+        {
+          "code": "CERTIFICATION_TRAINING",
+          "label": "Formation certifiante / de formateurs",
+          "definition": "Parcours qui delivre une certification ou forme des formateurs",
+          "examples": [
+            "CNT",
+            "CAT",
+            "formation de formateurs nationaux"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "Skills Development (CNT, CAT, Global Trainers)"
+          ]
+        },
+        {
+          "code": "ACADEMY_MASTERCLASS",
+          "label": "Academie / masterclass / programme long",
+          "definition": "Parcours structure en plusieurs modules sur plusieurs semaines",
+          "examples": [
+            "academie du leadership",
+            "masterclass",
+            "cycle de formation"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "JCI Global Leadership Masterclass"
+          ]
+        },
+        {
+          "code": "ONLINE_COURSE",
+          "label": "Cours en ligne / webinaire",
+          "definition": "Apprentissage a distance",
+          "examples": [
+            "webinaire",
+            "cours SDG Academy"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "Mastering Sustainable Leadership",
+            "Becoming Global Citizens"
+          ]
+        },
+        {
+          "code": "PUBLIC_SPEAKING",
+          "label": "Prise de parole en public",
+          "definition": "Concours, atelier ou club d'eloquence",
+          "examples": [
+            "concours d'eloquence d'OL",
+            "club de prise de parole"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "JCI Public Speaking Competition"
+          ]
+        },
+        {
+          "code": "DEBATE",
+          "label": "Debat",
+          "definition": "Concours ou session de debat contradictoire",
+          "examples": [
+            "tournoi de debat inter-OL"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "JCI Debating Championship"
+          ]
+        },
+        {
+          "code": "MENTORING_COACHING",
+          "label": "Mentorat / coaching",
+          "definition": "Accompagnement individuel ou en petit groupe dans la duree",
+          "examples": [
+            "parrainage de nouveaux membres",
+            "coaching de carriere"
+          ],
+          "home_area": "ID",
+          "jci_programme_examples": [
+            "Training Mentors"
+          ]
+        },
+        {
+          "code": "ID_OTHER",
+          "label": "Autre (preciser)",
+          "definition": null,
+          "examples": [],
+          "home_area": "ID",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "ENTREPRENEURSHIP_TRAINING",
+          "label": "Formation a l'entrepreneuriat",
+          "definition": "Formation centree sur la creation ou la gestion d'entreprise",
+          "examples": [
+            "bootcamp",
+            "atelier business plan",
+            "education financiere"
+          ],
+          "home_area": "BE",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "BUSINESS_COMPETITION",
+          "label": "Concours d'entrepreneurs / pitch",
+          "definition": "Competition entre porteurs de projets ou d'entreprises",
+          "examples": [
+            "concours de pitch",
+            "prix du jeune entrepreneur"
+          ],
+          "home_area": "BE",
+          "jci_programme_examples": [
+            "Creative Young Entrepreneur (CYE) Competition"
+          ]
+        },
+        {
+          "code": "INCUBATION_ACCELERATION",
+          "label": "Incubation / acceleration",
+          "definition": "Accompagnement structure d'entreprises dans la duree",
+          "examples": [
+            "programme d'acceleration",
+            "incubateur"
+          ],
+          "home_area": "BE",
+          "jci_programme_examples": [
+            "CYE Accelerator Program"
+          ]
+        },
+        {
+          "code": "BUSINESS_NETWORKING",
+          "label": "Rencontres d'affaires",
+          "definition": "Mise en relation d'entreprises ou d'entrepreneurs",
+          "examples": [
+            "business matching",
+            "salon",
+            "afterwork d'affaires"
+          ],
+          "home_area": "BE",
+          "jci_programme_examples": [
+            "JCI in Business (JIB)"
+          ]
+        },
+        {
+          "code": "ENTREPRENEUR_MENTORING",
+          "label": "Mentorat d'entrepreneurs",
+          "definition": "Accompagnement individuel d'entrepreneurs",
+          "examples": [
+            "parrainage par des chefs d'entreprise"
+          ],
+          "home_area": "BE",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "BE_OTHER",
+          "label": "Autre (preciser)",
+          "definition": null,
+          "examples": [],
+          "home_area": "BE",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "TWINNING",
+          "label": "Jumelage",
+          "definition": "Accord ou activite entre organisations JCI de pays differents",
+          "examples": [
+            "jumelage Benin-Canada",
+            "Buddy Project"
+          ],
+          "home_area": "IC",
+          "jci_programme_examples": [
+            "JCI Twinning"
+          ]
+        },
+        {
+          "code": "INTERNATIONAL_EVENT",
+          "label": "Congres / conference internationale",
+          "definition": "Participation a un rassemblement JCI multi-pays, ou organisation d'un tel rassemblement",
+          "examples": [
+            "CAMO",
+            "conference de zone",
+            "congres mondial"
+          ],
+          "home_area": "IC",
+          "jci_programme_examples": [
+            "Area Conferences",
+            "World Congress"
+          ]
+        },
+        {
+          "code": "INTERNATIONAL_EXCHANGE",
+          "label": "Echange / delegation / visite",
+          "definition": "Deplacement ou accueil de membres d'un autre pays",
+          "examples": [
+            "delegation",
+            "echange culturel"
+          ],
+          "home_area": "IC",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "CROSS_BORDER_PROJECT",
+          "label": "Projet transfrontalier",
+          "definition": "Projet mene conjointement par des organisations de plusieurs pays",
+          "examples": [
+            "projet commun entre deux OL de deux pays"
+          ],
+          "home_area": "IC",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "INTERNATIONAL_RECOGNITION",
+          "label": "Distinction internationale",
+          "definition": "Candidature ou designation a une distinction JCI internationale",
+          "examples": [
+            "selection nationale TOYP"
+          ],
+          "home_area": "IC",
+          "jci_programme_examples": [
+            "Ten Outstanding Young Persons (TOYP)"
+          ]
+        },
+        {
+          "code": "IC_OTHER",
+          "label": "Autre (preciser)",
+          "definition": null,
+          "examples": [],
+          "home_area": "IC",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "AWARENESS_CAMPAIGN",
+          "label": "Sensibilisation / campagne",
+          "definition": "Informer ou changer des comportements dans la population",
+          "examples": [
+            "campagne depistage",
+            "sensibilisation sante mentale",
+            "caravane"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "COMMUNITY_TRAINING",
+          "label": "Formation du public",
+          "definition": "Former des non-membres a une competence utile",
+          "examples": [
+            "formation de jeunes sans emploi",
+            "alphabetisation numerique"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "HEALTH_ACTION",
+          "label": "Action de sante",
+          "definition": "Soins, depistage, don de sang, consultations",
+          "examples": [
+            "journee de depistage",
+            "collecte de sang"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "ENVIRONMENTAL_ACTION",
+          "label": "Action environnementale",
+          "definition": "Action physique sur l'environnement",
+          "examples": [
+            "plantation d'arbres",
+            "nettoyage de plage",
+            "recyclage"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "DONATION_DISTRIBUTION",
+          "label": "Dons / distribution",
+          "definition": "Remise de biens a des beneficiaires",
+          "examples": [
+            "kits scolaires",
+            "vivres",
+            "fournitures"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "INFRASTRUCTURE_EQUIPMENT",
+          "label": "Infrastructure / equipement",
+          "definition": "Construire, rehabiliter ou equiper un lieu collectif",
+          "examples": [
+            "forage",
+            "salle de classe",
+            "bibliotheque"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "FUNDRAISING",
+          "label": "Collecte de fonds",
+          "definition": "Levee de fonds pour une cause",
+          "examples": [
+            "gala",
+            "course solidaire"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "ADVOCACY",
+          "label": "Plaidoyer",
+          "definition": "Demarche aupres des decideurs",
+          "examples": [
+            "petition",
+            "proclamation",
+            "rencontre avec une mairie"
+          ],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "CI_OTHER",
+          "label": "Autre (preciser)",
+          "definition": null,
+          "examples": [],
+          "home_area": "CI",
+          "jci_programme_examples": []
+        },
+        {
+          "code": "CONFERENCE_FORUM",
+          "label": "Conference / panel / forum",
+          "definition": "Area selon le public et le sujet",
+          "examples": [],
+          "home_area": null,
+          "jci_programme_examples": []
+        },
+        {
+          "code": "NETWORKING_SOCIAL",
+          "label": "Reseautage / evenement social",
+          "definition": "Souvent ID (interne)",
+          "examples": [],
+          "home_area": null,
+          "jci_programme_examples": []
+        },
+        {
+          "code": "OTHER",
+          "label": "Autre (preciser)",
+          "definition": "Si aucune Area n'est evidente",
+          "examples": [],
+          "home_area": null,
+          "jci_programme_examples": []
+        }
+      ]
     }
   },
   "rise_pillars": {
@@ -391,24 +830,47 @@
     "values": [
       {
         "code": "REBUILD_ECONOMIES",
-        "label": "Sustaining and Rebuilding Economies",
+        "label": "Sustaining and rebuilding economies",
         "variant_label": "Sustain and Rebuild Economies",
-        "published_share_2025": 0.403
+        "published_share_2025": 0.403,
+        "report_label": "Sustaining and Rebuilding Economies",
+        "report_variant_labels": [
+          "Sustaining and Rebuilding Economies",
+          "Sustain and Rebuild Economies"
+        ],
+        "inclusion_rule": "Soutien direct a des entreprises, entrepreneurs, PME, activites generatrices de revenus. Rapport p.85 : 'Support businesses, entrepreneurs, and SMEs'.",
+        "exclusion_rule": "Collecte de fonds caritative sans dimension economique."
       },
       {
         "code": "WORKFORCE",
-        "label": "Workforce Motivation",
+        "label": "Motivating the workforce",
         "variant_label": "Workforce Empowerment",
-        "published_share_2025": 0.3167
+        "published_share_2025": 0.3167,
+        "report_label": "Workforce Motivation",
+        "report_variant_labels": [
+          "Workforce Motivation",
+          "Workforce Empowerment"
+        ],
+        "inclusion_rule": "Employabilite, competences professionnelles, insertion, placement, motivation des travailleurs.",
+        "exclusion_rule": "Formation scolaire generale sans visee professionnelle."
       },
       {
         "code": "MENTAL_HEALTH",
-        "label": "Preserving Mental Health",
+        "label": "Preserving mental health and well-being",
         "variant_label": "Mental Health Awareness",
-        "published_share_2025": 0.2804
+        "published_share_2025": 0.2804,
+        "report_label": "Preserving Mental Health",
+        "report_variant_labels": [
+          "Preserving Mental Health",
+          "Mental Health Awareness"
+        ],
+        "inclusion_rule": "Sante mentale, bien-etre psychologique, stress, soutien psychosocial.",
+        "exclusion_rule": "Sante physique seule (depistage, don de sang) => non RISE."
       }
     ],
-    "arithmetic_note": "La somme des trois parts vaut 100,01 % (DQC-18, arrondi)."
+    "arithmetic_note": "La somme des trois parts vaut 100,01 % (DQC-18, arrondi).",
+    "now_scoped_to": "CI uniquement (D-24) — voir aussi classification_axes.area_of_opportunity.values[CI].rise",
+    "label_source_update": "v0.3.0 : 'label' porte desormais le libelle du site JCI (jci.cc, consulte 2026-09-19), 'report_label' et 'report_variant_labels' portent les libelles du rapport 2025 (conflit DQC-17, toujours non resolu cote JCI)."
   },
   "geographic_area": {
     "_note": "Axe géographique, totalement distinct de area_of_opportunity malgré l'homonymie du mot « Area » dans la source.",
@@ -732,7 +1194,10 @@
           "code": "INTERNAL_GOVERNANCE",
           "label": "Structuration interne"
         }
-      ]
+      ],
+      "status": "DEPRECATED_ALIAS",
+      "alias_of": "classification_axes.activity_family",
+      "deprecated_note": "Remplace par classification_axes.activity_family (D-25), plus riche (definition, exemples, home_area, jci_programme_examples) et desormais la 1ere dimension de classification. Conserve tel quel pour compatibilite (alias), plus utilise par le pipeline IA a partir de v0.3.0."
     },
     "impact_type": {
       "role": "Type une AFFIRMATION d'impact, jamais une mesure. Aucun impact n'est mesuré avec attribution dans le rapport (constat S3).",
@@ -805,7 +1270,8 @@
       "id": "R3",
       "rule": "Les trois axes de classification sont INDÉPENDANTS. Le domaine d'intervention d'un projet ne se déduit jamais de son programme, ni l'inverse. Chaque axe se déclare séparément.",
       "layer": "DECISION NEXUS 2026-09-18",
-      "supersedes": "R3 v0.1.0, qui faisait hériter le domaine depuis le programme — structure démentie par les distributions publiées p.85 et p.86"
+      "supersedes": "R3 v0.1.0, qui faisait hériter le domaine depuis le programme — structure démentie par les distributions publiées p.85 et p.86",
+      "amended_by": "D-23/D-24 (2026-09-19) : le programme n'est plus un axe independant (les programmes JCI sont des activites, voir activity_family) ; RISE n'est plus independant non plus, c'est une sous-classification DEPENDANTE de Community Impact. L'independance entre Areas et ODD, elle, reste vraie."
     },
     {
       "id": "R4",
@@ -840,6 +1306,30 @@
       "rule": "Un projet peut n'appartenir à aucun programme. L'absence de programme est une valeur légitime, pas une donnée manquante.",
       "layer": "OFFICIAL_JCI_FACT",
       "evidence": "« Other Projects 46.53% » [p.85]"
+    },
+    {
+      "id": "R10",
+      "rule": "Un projet porte 1..n familles d'activite (activity_family), independamment de son classement en Areas. home_area est une suggestion pour l'IA, jamais une regle d'heritage.",
+      "layer": "PROPOSED_STANDARD",
+      "evidence": "D-25 (2026-09-19)"
+    },
+    {
+      "id": "R11",
+      "rule": "Public 100% membres JCI (interne) => Community Impact ne peut jamais etre retenu, ni principal ni secondaire.",
+      "layer": "PROPOSED_STANDARD",
+      "evidence": "D-26 (2026-09-19)"
+    },
+    {
+      "id": "R12",
+      "rule": "RISE ne peut valoir 'oui' que si Community Impact figure parmi les Areas retenues (principale ou secondaire) ; sinon rise_status = not_applicable. Si oui, au moins 1 pilier est obligatoire.",
+      "layer": "PROPOSED_STANDARD",
+      "evidence": "D-24 (2026-09-19)"
+    },
+    {
+      "id": "R13",
+      "rule": "ODD : exactement 1 principal, aucun plafond sur le nombre de secondaires, mais chaque ODD retenu doit porter une phrase de justification citee du texte source.",
+      "layer": "PROPOSED_STANDARD",
+      "evidence": "D-27 (2026-09-19), remplace R5"
     }
   ],
   "cross_axis_analysis_enabled": {
