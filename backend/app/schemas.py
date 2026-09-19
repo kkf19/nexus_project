@@ -108,3 +108,37 @@ class ConfirmRequest(BaseModel):
 class ConfirmResult(BaseModel):
     project_id: str
     measurement_ids: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Annexe A #8 — POST /measurements/{id}/review
+# ---------------------------------------------------------------------------
+class ReviewRequest(BaseModel):
+    action: str  # validate|flag|unflag
+    reason: str | None = None
+    reviewed_by: str = "DEMO-USER"
+
+
+# ---------------------------------------------------------------------------
+# Annexe A #9 — POST /aggregations/run (et #10 GET /dashboards/{view})
+# ---------------------------------------------------------------------------
+class AggregationFilters(BaseModel):
+    reporting_year: int | None = None
+    area_of_opportunity: str | None = None   # axe A
+    programme: str | None = None              # axe B
+    sdg: int | None = None                    # axe C (numero d'ODD, 1..17)
+
+
+class AggregationRunRequest(BaseModel):
+    view: str  # ol|national|global
+    scope_organization_id: str | None = None  # requis pour ol/national, absent pour global
+    group_by: str = "network"                 # subject|geography|network
+    filters: AggregationFilters = AggregationFilters()
+
+
+# ---------------------------------------------------------------------------
+# Annexe A #12 — POST /aggregations/check-pair
+# ---------------------------------------------------------------------------
+class CheckPairRequest(BaseModel):
+    measurement_id_a: str
+    measurement_id_b: str

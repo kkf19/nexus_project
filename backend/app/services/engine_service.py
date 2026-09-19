@@ -34,3 +34,10 @@ Refusal = _engine_module.Refusal
 EngineResult = _engine_module.EngineResult
 DEDUP_ENABLED = _engine_module.DEDUP_ENABLED  # ne jamais modifier (D-03)
 STANDARD = _engine_module.STANDARD
+group_label = _engine_module.group_label
+
+# Empreinte du fichier moteur reellement charge (dev-brief.md 2.10, colonne
+# aggregate.engine_version) -- lecture de fichier, aucune logique ajoutee.
+import hashlib as _hashlib  # noqa: E402
+
+ENGINE_VERSION = "sha256:" + _hashlib.sha256(_ENGINE_PATH.read_bytes()).hexdigest()[:12]

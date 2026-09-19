@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app import models
-from app.services import engine_service, validators_service
+from app.services import engine_service, mo_builder, validators_service
 from app.services.ai_pipeline import _codes
 
 RISE_PROGRAMME_CODE = "RISE"
@@ -169,11 +169,12 @@ def _build_measurement_object(
             "code": mapping.get("unit_code"),
             "dimension": mapping.get("unit_dimension"),
         },
-        "subject": {
-            "type": "project",
-            "id": project_id,
-            "name": project_name,
-        },
+        # measurement-object.schema.json : subject.name doit etre une string si
+        # present (pas de null explicite) -- un projet sans nom (name=None,
+        # champ facultatif de ConfirmProject) omet donc la cle plutot que
+        # d'envoyer null, sinon le validateur rejette (trouve en testant la
+        # Phase 3 : un projet sans nom faisait echouer TOUTE confirmation).
+        "subject": {"type": "project", "id": project_id, **({"name": project_name} if project_name else {})},
         "population": {
             "target_group": mapping.get("target_group") or [],
             "internal_external": internal_external or "unknown",
@@ -213,70 +214,6 @@ def _build_measurement_object(
         "dedup_key": project_id,
     }
     return mo
-
-
-def _mo_to_measurement_row(mo: dict, *, submission_id: str, project_id: str, organization_id: str,
-                            taxonomy_version: str) -> models.Measurement:
-    definition = mo.get("definition") or {}
-    iaooi = mo.get("iaooi_class") or {}
-    unit = mo.get("unit") or {}
-    subject = mo.get("subject") or {}
-    population = mo.get("population") or {}
-    period = mo.get("period") or {}
-    source = mo.get("source") or {}
-    aggregation = mo.get("aggregation") or {}
-
-    return models.Measurement(
-        measurement_id=mo["measurement_id"],
-        standard=mo["standard"],
-        submission_id=submission_id,
-        project_id=project_id,
-        organization_id=organization_id,
-        taxonomy_version=taxonomy_version,
-        metric_code=mo["metric_code"],
-        metric_label_source=mo["metric_label_source"],
-        definition_status=definition.get("status"),
-        definition_text=definition.get("text"),
-        definition_layer=definition.get("layer"),
-        iaooi_value=iaooi.get("value"),
-        iaooi_layer=iaooi.get("layer"),
-        iaooi_standard=iaooi.get("standard"),
-        iaooi_rule_id=iaooi.get("rule_id"),
-        iaooi_confidence=iaooi.get("confidence"),
-        source_wording_class=mo.get("source_wording_class"),
-        taxonomy_refs=mo.get("taxonomy_refs"),
-        value=mo.get("value"),
-        value_status=mo.get("value_status"),
-        value_qualifier=mo.get("value_qualifier"),
-        value_range=mo.get("value_range"),
-        unit_code=unit.get("code"),
-        unit_dimension=unit.get("dimension"),
-        subject_type=subject.get("type"),
-        subject_id=subject.get("id"),
-        subject_name=subject.get("name"),
-        pop_internal_external=population.get("internal_external"),
-        pop_count_type=population.get("count_type"),
-        pop_dedup_basis=population.get("dedup_basis"),
-        pop_target_group=population.get("target_group"),
-        period_type=period.get("type"),
-        period_start=period.get("start"),
-        period_end=period.get("end"),
-        period_reporting_year=period.get("reporting_year"),
-        geography=mo.get("geography"),
-        layer=mo["layer"],
-        source_origin=source.get("origin"),
-        source_document_id=source.get("document_id"),
-        source_quote=source.get("quote"),
-        source_span=source.get("span"),
-        source_submitted_at=source.get("submitted_at"),
-        source_language=source.get("language"),
-        confidence=mo.get("confidence"),
-        verification_status=mo["verification_status"],
-        agg_equivalence_key=aggregation.get("equivalence_key"),
-        agg_aggregable="true" if aggregation.get("aggregable") else "false",
-        agg_refusal_reason=aggregation.get("refusal_reason"),
-        agg_dedup_key=aggregation.get("dedup_key"),
-    )
 
 
 def confirm_submission(db: Session, submission: models.Submission, payload) -> tuple[str, list[str]]:
@@ -426,7 +363,7 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
     # en production : ForeignKeyViolation sur derivation.measurement_id).
     measurement_rows: dict[str, models.Measurement] = {}
     for cid, mo in mo_by_candidate.items():
-        row = _mo_to_measurement_row(
+        row = mo_builder.mo_to_measurement_row(
             mo,
             submission_id=submission.submission_id,
             project_id=project_id,
