@@ -1,12 +1,25 @@
 """Construction et validation des Measurement Objects a la confirmation de la
-fiche (Annexe A #5, dev-brief.md section 3.2).
+fiche (Annexe A #5, dev-brief.md section 3.2 ; revu par impact-science.md,
+D-23 a D-31).
 
-Principe : pour chaque chiffre retenu, on construit un Measurement Object
-complet (forme imbriquee de measurement-object.schema.json), on le fait
-passer par les DEUX validateurs reutilises tels quels (section 8), puis par
-equivalence_key() et eligibility() du moteur -- CE DERNIER calcule la cle
-d'equivalence et l'eligibilite, jamais l'IA (RI-03). Ce n'est qu'apres coup
-que le MO est eclate en colonnes pour la table `measurement` (section 2.8).
+Principe : pour chaque chiffre retenu, on construit un ou plusieurs
+Measurement Object complets (forme imbriquee de measurement-object.schema.json),
+on les fait passer par les DEUX validateurs reutilises tels quels (section 8),
+puis par equivalence_key() et eligibility() du moteur -- CE DERNIER calcule la
+cle d'equivalence et l'eligibilite, jamais l'IA (RI-03). Ce n'est qu'apres
+coup que le MO est eclate en colonnes pour la table `measurement` (section 2.8).
+
+Un candidat dont la population resultante est "mixed" (interne + externe)
+produit DEUX Measurement Objects distincts, jamais un seul chiffre etiquete
+"mixed" (D-26, AC-30) : R7 (membres JCI et public externe jamais additionnes)
+serait sinon impossible a faire respecter par le moteur en aval.
+
+Les ressources (benevoles JCI, heures de benevolat) ne viennent plus d'un
+candidat numerique generique : ce sont desormais des champs dedies et
+obligatoires de la fiche de confirmation (D-28, D-30), analogues a
+project.name/period. Le nombre de benevoles JCI devient sa propre mesure
+(metric_code=VOLUNTEERS, internal_external=internal) ; les heures de
+benevolat sont pre-calculees (benevoles x duree) sauf correction du SG.
 
 Si UN SEUL candidat retenu echoue la validation, RIEN n'est ecrit (section
 3.2, "si la transaction echoue, rien n'est ecrit") : cette fonction ne fait
@@ -24,7 +37,19 @@ from app import models
 from app.services import engine_service, mo_builder, validators_service
 from app.services.ai_pipeline import _codes
 
-RISE_PROGRAMME_CODE = "RISE"
+RISE_PROGRAMME_CODE = "RISE"  # historique (axe programme, D-23 DEPRECATED) -- conserve
+                                # uniquement pour lire d'anciennes donnees, plus alimente.
+
+# D-30 / RI-07 : un chiffre confirme a la fiche mais absent du texte source
+# soumis (l'IA ne l'y a pas trouve) n'a pas de citation a donner -- on ne
+# fabrique JAMAIS de fausse citation (P1/P9 du schema). On le range alors en
+# SEMANTIC_INTERPRETATION / value_status=estimated (methode), jamais en
+# LOCAL_REPORTED_FACT (qui exige une citation non vide, P1/P9).
+RESOURCE_NO_QUOTE_METHOD = (
+    "Valeur saisie ou confirmee directement par l'organisation locale a la "
+    "confirmation de la fiche ; absente (ou non retrouvee telle quelle) du "
+    "texte source soumis."
+)
 
 
 class ConfirmError(Exception):
@@ -42,7 +67,14 @@ def _index_by_candidate_id(items: list[dict]) -> dict[str, dict]:
 def _validate_axes(axes, taxonomy_content: dict) -> list[str]:
     """R2 (>=1 domaine), R5 (exactement 1 SDG primary), R4 (piliers RISE
     requis si RISE coche), et codes de taxonomie inconnus rejetes (jamais
-    enregistres)."""
+    enregistres).
+
+    NOTE (A3) : cette fonction garde son perimetre Phase 3 (axes.programme et
+    axes.rise_pillars, forme historique). Les regles propres a
+    impact-science.md (Area principale unique, RISE conditionne a CI, ODD
+    sans plafond mais justifies, familles d'activite) sont ajoutees en A5
+    sans casser ce qui est deja verifie ici.
+    """
     errors: list[str] = []
     tc_axes = taxonomy_content["classification_axes"]
     allowed_area = set(_codes(tc_axes["area_of_opportunity"]))
@@ -90,7 +122,42 @@ def _validate_project(project) -> list[str]:
             errors.append("project.expected_outcome requis quand outcome_status = pending_follow_up")
         if not project.follow_up_date:
             errors.append("project.follow_up_date requis quand outcome_status = pending_follow_up")
+    # D-28/D-30 : ces trois champs sont bloquants. Pydantic (schemas.ConfirmProject,
+    # champs non-optionnels) refuse deja une valeur absente/nulle avant meme
+    # d'arriver ici (422 nommant le champ, AC-16) ; on ne revalide donc que la
+    # coherence entre eux, pas leur simple presence.
+    if project.jci_volunteers_count is not None and project.jci_volunteers_count < 0:
+        errors.append("project.jci_volunteers_count : une valeur negative n'est pas acceptee")
+    if project.activity_duration_hours is not None and project.activity_duration_hours < 0:
+        errors.append("project.activity_duration_hours : une valeur negative n'est pas acceptee")
+    if project.volunteer_hours is not None and project.volunteer_hours < 0:
+        errors.append("project.volunteer_hours : une valeur negative n'est pas acceptee")
     return errors
+
+
+def _base_geography(organization: "models.Organization") -> dict[str, Any]:
+    geography: dict[str, Any] = {
+        "local_organization": {"value": organization.name, "layer": "LOCAL_REPORTED_FACT"},
+    }
+    if organization.country_iso2:
+        geography["country_iso2"] = {"value": organization.country_iso2, "layer": "LOCAL_REPORTED_FACT"}
+        # geographic_area (SEMANTIC_INTERPRETATION, via geo_mapping) : non branche
+        # tant que le vrai compte OL (D-18, country/geographic_area) n'existe pas.
+    return geography
+
+
+def _finalize_mo(mo: dict[str, Any], *, project_id: str) -> dict[str, Any]:
+    """Calcule aggregation.{aggregable, equivalence_key, refusal_reason,
+    dedup_key} via le moteur -- JAMAIS par l'IA ni a la main (RI-03)."""
+    eq_key = engine_service.equivalence_key(mo)
+    refusal = engine_service.eligibility(mo)
+    mo["aggregation"] = {
+        "aggregable": refusal is None,
+        "equivalence_key": eq_key,
+        "refusal_reason": refusal.reason if refusal else None,
+        "dedup_key": project_id,
+    }
+    return mo
 
 
 def _build_measurement_object(
@@ -98,7 +165,10 @@ def _build_measurement_object(
     measurement_id: str,
     extraction_cand: dict,
     mapping: dict,
-    user_input,
+    value: float | None,
+    internal_external: str | None,
+    count_type: str | None,
+    corrected: bool,
     project_id: str,
     project_name: str | None,
     reporting_year: int,
@@ -109,25 +179,18 @@ def _build_measurement_object(
     submission: "models.Submission",
     relations: list[dict],
 ) -> dict[str, Any]:
-    value = extraction_cand.get("value")
-    if user_input is not None and user_input.value is not None:
-        value = user_input.value
+    """Construit UN Measurement Object pour une valeur numerique donnee.
+
+    A3 (impact-science.md) : value/internal_external/count_type sont
+    desormais des parametres explicites (plus derives en interne d'un seul
+    `user_input`) pour permettre a l'appelant de construire deux MO distincts
+    a partir d'un meme candidat quand la population resultante est mixte
+    (D-26/AC-30) -- jamais un seul chiffre etiquete "mixed".
+    """
     value_qualifier = extraction_cand.get("value_qualifier")
     definition_text = extraction_cand.get("definition_text")
 
-    count_type = mapping.get("count_type")
-    internal_external = mapping.get("internal_external")
-    if user_input is not None:
-        count_type = user_input.count_type or count_type
-        internal_external = user_input.internal_external or internal_external
-
-    geography: dict[str, Any] = {
-        "local_organization": {"value": organization.name, "layer": "LOCAL_REPORTED_FACT"},
-    }
-    if organization.country_iso2:
-        geography["country_iso2"] = {"value": organization.country_iso2, "layer": "LOCAL_REPORTED_FACT"}
-        # geographic_area (SEMANTIC_INTERPRETATION, via geo_mapping) : non branche
-        # tant que le vrai compte OL (D-18, country/geographic_area) n'existe pas.
+    geography = _base_geography(organization)
 
     derivation = [
         {"step": "extract_number", "rule_id": "EXTRACT-NUM", "agent": "llm_extractor@v0",
@@ -135,7 +198,7 @@ def _build_measurement_object(
         {"step": "classify", "rule_id": "MAP-METRIC", "agent": "llm_classifier@v0",
          "confidence": mapping.get("confidence")},
     ]
-    if user_input is not None and user_input.corrected:
+    if corrected:
         derivation.append({"step": "human_validation", "rule_id": "HUMAN-CONFIRM", "agent": "human@ol",
                             "confidence": "H"})
 
@@ -204,16 +267,264 @@ def _build_measurement_object(
     if relations:
         mo["relations"] = relations
 
-    # equivalence_key / eligibility : calcules par le moteur, JAMAIS par l'IA (RI-03)
-    eq_key = engine_service.equivalence_key(mo)
-    refusal = engine_service.eligibility(mo)
-    mo["aggregation"] = {
-        "aggregable": refusal is None,
-        "equivalence_key": eq_key,
-        "refusal_reason": refusal.reason if refusal else None,
-        "dedup_key": project_id,
-    }
-    return mo
+    return _finalize_mo(mo, project_id=project_id)
+
+
+def _build_measurement_objects_for_candidate(
+    *,
+    extraction_cand: dict,
+    mapping: dict,
+    user_input,
+    measurement_ids: dict[str, str],
+    project_id: str,
+    project_name: str | None,
+    reporting_year: int,
+    period_start: str | None,
+    period_end: str | None,
+    taxonomy_refs_snapshot: dict,
+    organization: "models.Organization",
+    submission: "models.Submission",
+    relations: list[dict],
+) -> tuple[list[dict], list[str]]:
+    """Construit 1 ou 2 MO pour un candidat retenu. Retourne (mos, erreurs) --
+    ne leve jamais : les erreurs sont collectees comme partout ailleurs dans
+    ce module, pour que confirm_submission puisse toutes les rassembler avant
+    de decider si la transaction entiere echoue.
+
+    2 MO quand la population resultante est "mixed" (D-26/AC-30) : deux
+    mesures distinctes (internal / external), jamais un seul chiffre.
+    """
+    candidate_id = extraction_cand.get("candidate_id")
+    count_type = mapping.get("count_type")
+    internal_external = mapping.get("internal_external")
+    corrected = bool(user_input and user_input.corrected)
+    if user_input is not None:
+        count_type = user_input.count_type or count_type
+        internal_external = user_input.internal_external or internal_external
+
+    if internal_external == "mixed":
+        if user_input is None or user_input.value_internal is None or user_input.value_external is None:
+            return [], [
+                f"candidat {candidate_id} : population mixte (interne + externe) -- "
+                "value_internal ET value_external sont tous deux requis (D-26, AC-30). "
+                "Un seul chiffre etiquete 'mixed' n'est jamais accepte."
+            ]
+        mos = [
+            _build_measurement_object(
+                measurement_id=measurement_ids["INT"], extraction_cand=extraction_cand, mapping=mapping,
+                value=user_input.value_internal, internal_external="internal", count_type=count_type,
+                corrected=corrected, project_id=project_id, project_name=project_name,
+                reporting_year=reporting_year, period_start=period_start, period_end=period_end,
+                taxonomy_refs_snapshot=taxonomy_refs_snapshot, organization=organization,
+                submission=submission, relations=relations,
+            ),
+            _build_measurement_object(
+                measurement_id=measurement_ids["EXT"], extraction_cand=extraction_cand, mapping=mapping,
+                value=user_input.value_external, internal_external="external", count_type=count_type,
+                corrected=corrected, project_id=project_id, project_name=project_name,
+                reporting_year=reporting_year, period_start=period_start, period_end=period_end,
+                taxonomy_refs_snapshot=taxonomy_refs_snapshot, organization=organization,
+                submission=submission, relations=relations,
+            ),
+        ]
+        return mos, []
+
+    value = extraction_cand.get("value")
+    if user_input is not None and user_input.value is not None:
+        value = user_input.value
+    mo = _build_measurement_object(
+        measurement_id=measurement_ids["SINGLE"], extraction_cand=extraction_cand, mapping=mapping,
+        value=value, internal_external=internal_external, count_type=count_type,
+        corrected=corrected, project_id=project_id, project_name=project_name,
+        reporting_year=reporting_year, period_start=period_start, period_end=period_end,
+        taxonomy_refs_snapshot=taxonomy_refs_snapshot, organization=organization,
+        submission=submission, relations=relations,
+    )
+    return [mo], []
+
+
+def _build_resource_measurements(
+    *,
+    project_id: str,
+    project_name: str | None,
+    reporting_year: int,
+    period_start: str | None,
+    period_end: str | None,
+    organization: "models.Organization",
+    submission: "models.Submission",
+    jci_volunteers_count: float,
+    activity_duration_hours: float,
+    volunteer_hours: float,
+    volunteer_hours_corrected: bool,
+    volunteers_extraction: dict | None,
+    duration_extraction: dict | None,
+) -> list[dict]:
+    """D-25/D-28/D-30 -- construit les mesures de RESSOURCES a partir des
+    champs dedies de la fiche de confirmation (plus des candidats numeriques
+    generiques) :
+
+    - VOLUNTEERS (internal) : le nombre de benevoles JCI confirme.
+    - VOLUNTEER_HOURS : benevoles JCI x duree, value_status=calculated avec
+      sa formule et sa derivation (AC-29), SAUF si le SG a corrige la valeur
+      calculee : dans ce cas la valeur corrigee est stockee telle quelle et
+      la derivation de calcul n'est plus appliquee (AC-29).
+
+    volunteers_extraction / duration_extraction : dict optionnel
+    {"origin": "quoted"|"inferred", "quote": str|None} tel que produit par le
+    pipeline IA (A4) pour project.jci_volunteers_count / activity_duration_hours
+    -- absent tant que A4 n'alimente pas encore ces champs, auquel cas on
+    traite prudemment la valeur comme non citee (RI-07 : jamais de fausse
+    citation).
+    """
+    geography = _base_geography(organization)
+    subject = {"type": "project", "id": project_id, **({"name": project_name} if project_name else {})}
+    period = {"type": "reporting_year", "start": period_start, "end": period_end, "reporting_year": reporting_year}
+
+    def _quote_of(extraction: dict | None) -> str | None:
+        if not extraction:
+            return None
+        if extraction.get("origin") == "quoted" and extraction.get("quote"):
+            return extraction["quote"]
+        return None
+
+    volunteers_quote = _quote_of(volunteers_extraction)
+    volunteers_id = f"MEAS-{uuid.uuid4().hex[:12]}"
+
+    if volunteers_quote:
+        volunteers_mo: dict[str, Any] = {
+            "measurement_id": volunteers_id,
+            "standard": engine_service.STANDARD,
+            "metric_code": "VOLUNTEERS",
+            "metric_label_source": "benevoles JCI",
+            "definition": {"status": "unknown", "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT",
+                            "layer": "LOCAL_REPORTED_FACT"},
+            "iaooi_class": {"value": "INPUT", "layer": "SEMANTIC_INTERPRETATION",
+                             "standard": "PROPOSED_STANDARD:IAOOI-v0", "rule_id": "INPUT-VOLUNTEERS-JCI",
+                             "confidence": "H"},
+            "value": jci_volunteers_count,
+            "value_status": "extracted",
+            "unit": {"code": "person", "dimension": "count"},
+            "subject": subject,
+            "population": {"target_group": ["JCI_MEMBERS"], "internal_external": "internal",
+                            "count_type": "direct", "dedup_basis": "unique_persons"},
+            "period": period,
+            "geography": geography,
+            "layer": "LOCAL_REPORTED_FACT",
+            "source": {"origin": "submission", "document_id": submission.submission_id,
+                       "quote": volunteers_quote, "submitted_at": submission.submitted_at.isoformat()
+                       if submission.submitted_at else None, "language": submission.language},
+            "derivation": [{"step": "extract_number", "rule_id": "EXTRACT-NUM", "agent": "llm_extractor@v0",
+                             "confidence": "H"}],
+            "confidence": "H",
+            "verification_status": "reported",
+        }
+    else:
+        volunteers_mo = {
+            "measurement_id": volunteers_id,
+            "standard": engine_service.STANDARD,
+            "metric_code": "VOLUNTEERS",
+            "metric_label_source": "benevoles JCI",
+            "definition": {"status": "unknown", "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT",
+                            "layer": "LOCAL_REPORTED_FACT"},
+            "iaooi_class": {"value": "INPUT", "layer": "SEMANTIC_INTERPRETATION",
+                             "standard": "PROPOSED_STANDARD:IAOOI-v0", "rule_id": "INPUT-VOLUNTEERS-JCI",
+                             "confidence": "M"},
+            "value": jci_volunteers_count,
+            "value_status": "estimated",
+            "method": RESOURCE_NO_QUOTE_METHOD,
+            "unit": {"code": "person", "dimension": "count"},
+            "subject": subject,
+            "population": {"target_group": ["JCI_MEMBERS"], "internal_external": "internal",
+                            "count_type": "direct", "dedup_basis": "unique_persons"},
+            "period": period,
+            "geography": geography,
+            "layer": "SEMANTIC_INTERPRETATION",
+            "source": {"origin": "submission", "document_id": submission.submission_id,
+                       "submitted_at": submission.submitted_at.isoformat()
+                       if submission.submitted_at else None, "language": submission.language},
+            "derivation": [{"step": "human_validation", "rule_id": "HUMAN-FORM-ENTRY", "agent": "human@ol",
+                             "confidence": "M"}],
+            "confidence": "M",
+            "verification_status": "reported",
+        }
+    volunteers_mo = _finalize_mo(volunteers_mo, project_id=project_id)
+
+    expected_hours = jci_volunteers_count * activity_duration_hours
+    hours_matches_formula = (not volunteer_hours_corrected) and abs(volunteer_hours - expected_hours) < 1e-9
+    hours_id = f"MEAS-{uuid.uuid4().hex[:12]}"
+
+    if hours_matches_formula:
+        # AC-29 : heures pre-calculees, value_status=calculated, formule +
+        # derivation qui la porte (P2/V4 du schema : calculated impose
+        # SEMANTIC_INTERPRETATION + formula + inputs).
+        hours_mo: dict[str, Any] = {
+            "measurement_id": hours_id,
+            "standard": engine_service.STANDARD,
+            "metric_code": "VOLUNTEER_HOURS",
+            "metric_label_source": "heures de benevolat (calcule)",
+            "definition": {"status": "specified",
+                           "text": "Benevoles JCI x duree de l'activite en heures",
+                           "layer": "SEMANTIC_INTERPRETATION"},
+            "iaooi_class": {"value": "INPUT", "layer": "SEMANTIC_INTERPRETATION",
+                             "standard": "PROPOSED_STANDARD:IAOOI-v0", "rule_id": "CALC-VOLUNTEER-HOURS",
+                             "confidence": "H"},
+            "value": expected_hours,
+            "value_status": "calculated",
+            "formula": "VOLUNTEERS(internal) x activity_duration_hours",
+            "inputs": [volunteers_id],
+            "unit": {"code": "hour", "dimension": "duration"},
+            "subject": subject,
+            "population": {"target_group": ["JCI_MEMBERS"], "internal_external": "internal",
+                            "count_type": "direct", "dedup_basis": "unique_persons"},
+            "period": period,
+            "geography": geography,
+            "layer": "SEMANTIC_INTERPRETATION",
+            "source": {"origin": "engine", "document_id": submission.submission_id,
+                       "submitted_at": submission.submitted_at.isoformat()
+                       if submission.submitted_at else None},
+            "derivation": [{
+                "step": "calculate", "rule_id": "CALC-VOLUNTEER-HOURS", "agent": "rules@v0",
+                "input_refs": [volunteers_id], "confidence": "H",
+            }],
+            "confidence": "H",
+            "verification_status": "reported",
+        }
+    else:
+        # D-30 : le SG a corrige la valeur calculee -- la valeur corrigee est
+        # stockee telle quelle, la derivation de calcul n'est plus appliquee
+        # (AC-29). Meme regle "jamais de fausse citation" que pour VOLUNTEERS
+        # sans citation : SEMANTIC_INTERPRETATION / estimated / methode.
+        hours_mo = {
+            "measurement_id": hours_id,
+            "standard": engine_service.STANDARD,
+            "metric_code": "VOLUNTEER_HOURS",
+            "metric_label_source": "heures de benevolat (corrige par l'OL)",
+            "definition": {"status": "unknown", "text": "NOT SPECIFIED IN THE SOURCE DOCUMENT",
+                           "layer": "LOCAL_REPORTED_FACT"},
+            "iaooi_class": {"value": "INPUT", "layer": "SEMANTIC_INTERPRETATION",
+                             "standard": "PROPOSED_STANDARD:IAOOI-v0", "rule_id": "INPUT-VOLUNTEER-HOURS",
+                             "confidence": "M"},
+            "value": volunteer_hours,
+            "value_status": "estimated",
+            "method": RESOURCE_NO_QUOTE_METHOD + " Remplace la valeur calculee (benevoles x duree).",
+            "unit": {"code": "hour", "dimension": "duration"},
+            "subject": subject,
+            "population": {"target_group": ["JCI_MEMBERS"], "internal_external": "internal",
+                            "count_type": "direct", "dedup_basis": "unique_persons"},
+            "period": period,
+            "geography": geography,
+            "layer": "SEMANTIC_INTERPRETATION",
+            "source": {"origin": "submission", "document_id": submission.submission_id,
+                       "submitted_at": submission.submitted_at.isoformat()
+                       if submission.submitted_at else None, "language": submission.language},
+            "derivation": [{"step": "human_validation", "rule_id": "HUMAN-CONFIRM", "agent": "human@ol",
+                             "confidence": "H"}],
+            "confidence": "H",
+            "verification_status": "reported",
+        }
+    hours_mo = _finalize_mo(hours_mo, project_id=project_id)
+
+    return [volunteers_mo, hours_mo]
 
 
 def confirm_submission(db: Session, submission: models.Submission, payload) -> tuple[str, list[str]]:
@@ -261,7 +572,25 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
     if not included_ids:
         raise ConfirmError([{"message": "aucun chiffre retenu : rien a confirmer"}])
 
-    measurement_id_by_candidate = {cid: f"MEAS-{uuid.uuid4().hex[:12]}" for cid in included_ids}
+    # Identifiants generes a l'avance (SINGLE, INT, EXT) : un candidat non
+    # mixte n'utilise que SINGLE, un candidat mixte que INT+EXT. Les ids non
+    # utilises sont simplement ignores (cf. _build_measurement_objects_for_candidate).
+    ids_by_candidate: dict[str, dict[str, str]] = {
+        cid: {"SINGLE": f"MEAS-{uuid.uuid4().hex[:12]}",
+              "INT": f"MEAS-{uuid.uuid4().hex[:12]}",
+              "EXT": f"MEAS-{uuid.uuid4().hex[:12]}"}
+        for cid in included_ids
+    }
+
+    def _primary_measurement_id(cid: str) -> str:
+        """Identifiant utilise comme cible d'une relation vers ce candidat.
+        Choix simplificateur documente : pour un candidat mixte (rare en
+        relation avec un autre candidat), on pointe vers sa part interne --
+        cas non couvert par les criteres d'acceptation A3."""
+        return ids_by_candidate[cid]["INT"] if (
+            (user_by_id.get(cid) and user_by_id[cid].internal_external == "mixed")
+            or mapping_by_id.get(cid, {}).get("internal_external") == "mixed"
+        ) else ids_by_candidate[cid]["SINGLE"]
 
     project_id = f"PRJ-{uuid.uuid4().hex[:12]}"
     taxonomy_refs_snapshot = {
@@ -271,7 +600,7 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
         "activity_type": (standardized.payload.get("project_classification") or {}).get("activity_type", []),
     }
 
-    mo_by_candidate: dict[str, dict] = {}
+    all_mos: dict[str, dict] = {}
     validation_errors: list[dict] = []
     for cid in included_ids:
         relations_for_candidate = []
@@ -281,17 +610,17 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
                 other = rel.get("candidate_id_b")
             elif rel.get("candidate_id_b") == cid:
                 other = rel.get("candidate_id_a")
-            if other and other in measurement_id_by_candidate:
+            if other and other in ids_by_candidate:
                 relations_for_candidate.append({
                     "relation_type": rel.get("relation_type"),
-                    "measurement_id": measurement_id_by_candidate[other],
+                    "measurement_id": _primary_measurement_id(other),
                 })
 
-        mo = _build_measurement_object(
-            measurement_id=measurement_id_by_candidate[cid],
+        mos, cand_errors = _build_measurement_objects_for_candidate(
             extraction_cand=extraction_by_id[cid],
             mapping=mapping_by_id[cid],
             user_input=user_by_id.get(cid),
+            measurement_ids=ids_by_candidate[cid],
             project_id=project_id,
             project_name=payload.project.name,
             reporting_year=payload.project.reporting_year,
@@ -302,21 +631,56 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
             submission=submission,
             relations=relations_for_candidate,
         )
+        if cand_errors:
+            validation_errors += [{"candidate_id": cid, "message": m} for m in cand_errors]
+            continue
+        for mo in mos:
+            ok, detail = validators_service.is_valid(mo)
+            if not ok:
+                # validate_measurement_object() renvoie des paires (code, message) ;
+                # validate_provenance() renvoie des triplets (code, path, message).
+                # Les deux formes sont normalisees ici (cf. docs/technical/
+                # validate_measurement_objects.py:validate_one et Tier 2/validate_provenance.py).
+                for code, msg in detail["schema_errors"]:
+                    validation_errors.append({"candidate_id": cid, "message": f"{code}: {msg}"})
+                for code, path, msg in detail["provenance_blocking"]:
+                    validation_errors.append({"candidate_id": cid, "message": f"{code} {path}: {msg}"})
+            else:
+                all_mos[mo["measurement_id"]] = mo
+
+    # --- Ressources (D-25/D-28/D-30) : benevoles JCI + heures, champs dedies
+    # de la fiche, plus des candidats numeriques generiques. ---
+    volunteers_extraction = (structured.payload.get("project") or {}).get("jci_volunteers_count")
+    duration_extraction = (structured.payload.get("project") or {}).get("activity_duration_hours")
+    resource_mos = _build_resource_measurements(
+        project_id=project_id,
+        project_name=payload.project.name,
+        reporting_year=payload.project.reporting_year,
+        period_start=payload.project.period_start,
+        period_end=payload.project.period_end,
+        organization=organization,
+        submission=submission,
+        jci_volunteers_count=payload.project.jci_volunteers_count,
+        activity_duration_hours=payload.project.activity_duration_hours,
+        volunteer_hours=payload.project.volunteer_hours,
+        volunteer_hours_corrected=payload.project.volunteer_hours_corrected,
+        volunteers_extraction=volunteers_extraction,
+        duration_extraction=duration_extraction,
+    )
+    for mo in resource_mos:
         ok, detail = validators_service.is_valid(mo)
         if not ok:
-            # validate_measurement_object() renvoie des paires (code, message) ;
-            # validate_provenance() renvoie des triplets (code, path, message).
-            # Les deux formes sont normalisees ici (cf. docs/technical/
-            # validate_measurement_objects.py:validate_one et Tier 2/validate_provenance.py).
             for code, msg in detail["schema_errors"]:
-                validation_errors.append({"candidate_id": cid, "message": f"{code}: {msg}"})
+                validation_errors.append({"candidate_id": "RESOURCES", "message": f"{code}: {msg}"})
             for code, path, msg in detail["provenance_blocking"]:
-                validation_errors.append({"candidate_id": cid, "message": f"{code} {path}: {msg}"})
+                validation_errors.append({"candidate_id": "RESOURCES", "message": f"{code} {path}: {msg}"})
         else:
-            mo_by_candidate[cid] = mo
+            all_mos[mo["measurement_id"]] = mo
 
     if validation_errors:
         raise ConfirmError(validation_errors)
+    if not all_mos:
+        raise ConfirmError([{"message": "aucune mesure valide a ecrire : rien a confirmer"}])
 
     # --- Rien n'a echoue : ecriture reelle (une seule transaction, non commitee ici) ---
     now = datetime.now(timezone.utc)
@@ -334,6 +698,9 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
             datetime.strptime(payload.project.follow_up_date, "%Y-%m-%d").date()
             if payload.project.follow_up_date else None
         ),
+        activity_duration_hours=payload.project.activity_duration_hours,
+        # rise_status : calcule en A5 a partir des Areas confirmees (D-24) --
+        # laisse a NULL ici, rempli par la suite de la validation des axes.
         programme_confirmed=True,
         taxonomy_version=taxonomy_release.version,
         confirmed_by=payload.confirmed_by,
@@ -362,7 +729,7 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
     # plusieurs mesures + leurs enfants ajoutees de facon entrelacee (constate
     # en production : ForeignKeyViolation sur derivation.measurement_id).
     measurement_rows: dict[str, models.Measurement] = {}
-    for cid, mo in mo_by_candidate.items():
+    for measurement_id, mo in all_mos.items():
         row = mo_builder.mo_to_measurement_row(
             mo,
             submission_id=submission.submission_id,
@@ -371,16 +738,17 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
             taxonomy_version=taxonomy_release.version,
         )
         db.add(row)
-        measurement_rows[cid] = row
+        measurement_rows[measurement_id] = row
     db.flush()
 
-    for cid, mo in mo_by_candidate.items():
-        row = measurement_rows[cid]
+    for measurement_id, mo in all_mos.items():
+        row = measurement_rows[measurement_id]
         for pos, step in enumerate(mo["derivation"]):
             db.add(models.Derivation(
                 measurement_id=row.measurement_id, position=pos,
                 step=step.get("step"), rule_id=step.get("rule_id"),
-                agent=step.get("agent"), confidence=step.get("confidence"),
+                agent=step.get("agent"), input_refs=step.get("input_refs"),
+                confidence=step.get("confidence"),
             ))
         for rel in mo.get("relations", []):
             db.add(models.MeasurementRelation(
@@ -390,4 +758,4 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
             ))
 
     submission.pipeline_status = "confirmed"
-    return project_id, [measurement_id_by_candidate[cid] for cid in mo_by_candidate]
+    return project_id, list(all_mos.keys())
