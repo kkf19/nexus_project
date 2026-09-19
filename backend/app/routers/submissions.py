@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,7 @@ from app.models import ExtractionCandidate, Submission, TaxonomyRelease
 from app.schemas import SubmissionCreate, SubmissionDetail, SubmissionOut
 from app.services import ai_pipeline
 
+logger = logging.getLogger("nexus.submissions")
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 
 
@@ -102,10 +104,12 @@ def create_submission(payload: SubmissionCreate, db: Session = Depends(get_db)):
         db.refresh(submission)
     except Exception as exc:
         db.rollback()
-        # Diagnostic temporaire (deploiement hackathon) : on remonte le
-        # message d'erreur reel plutot qu'un 500 generique, le temps de
-        # stabiliser le premier deploiement en production.
-        raise HTTPException(status_code=500, detail=f"creation submission : {exc}") from exc
+        # Le detail complet part dans les logs serveur (visibles sur Render,
+        # onglet Logs) ; l'appelant ne recoit qu'un message generique, pour
+        # ne jamais exposer de details internes (SQL, schema) via l'API.
+        logger.exception("Echec de creation de submission (organization_id=%s, user_id=%s)",
+                          payload.organization_id, payload.user_id)
+        raise HTTPException(status_code=500, detail="Impossible d'enregistrer le temoignage pour le moment.") from exc
 
     _run_pipeline(submission, db)
     db.refresh(submission)
