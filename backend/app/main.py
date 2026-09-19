@@ -65,42 +65,51 @@ def health():
 
 @app.get("/admin/debug-seed")
 def debug_seed():
-    """Diagnostic temporaire (deploiement hackathon) : verifie/cree le compte
-    demo et remonte l'erreur exacte si ca echoue, sans avoir besoin d'acceder
-    aux logs Render. A retirer une fois le socle production stabilise."""
+    """Diagnostic temporaire (deploiement hackathon) : etat detaille de
+    l'organisation/app_user demo, avec creation pas a pas (flush intermediaire)
+    pour isoler precisement ou une eventuelle erreur se produit. A retirer une
+    fois le socle production stabilise."""
+    from sqlalchemy import select
+
     from app import models
     from app.database import SessionLocal
 
     db = SessionLocal()
+    diag: dict = {}
     try:
-        existing_org = db.get(models.Organization, "DEMO-OL")
-        existing_user = db.get(models.AppUser, "DEMO-USER")
-        created = []
-        if not existing_org:
+        org_ids = db.execute(select(models.Organization.organization_id)).scalars().all()
+        diag["organizations_in_db_before"] = org_ids
+        if "DEMO-OL" not in org_ids:
             db.add(models.Organization(
                 organization_id="DEMO-OL",
                 org_type="local",
                 name="OL Demo (a remplacer par un vrai compte, Phase 4)",
                 country_iso2=None,
             ))
-            created.append("organization")
-        if not existing_user:
+            db.flush()
+            diag["organization_created"] = True
+        else:
+            diag["organization_created"] = False
+
+        user_ids = db.execute(select(models.AppUser.user_id)).scalars().all()
+        diag["users_in_db_before"] = user_ids
+        if "DEMO-USER" not in user_ids:
             db.add(models.AppUser(
                 user_id="DEMO-USER",
                 organization_id="DEMO-OL",
                 role="admin_ol",
             ))
-            created.append("app_user")
+            db.flush()
+            diag["app_user_created"] = True
+        else:
+            diag["app_user_created"] = False
+
         db.commit()
-        return {
-            "already_existed": {
-                "organization": bool(existing_org),
-                "app_user": bool(existing_user),
-            },
-            "created": created,
-        }
+        diag["status"] = "ok"
+        return diag
     except Exception as exc:
         db.rollback()
-        return {"error": str(exc)}
+        diag["error"] = str(exc)
+        return diag
     finally:
         db.close()
