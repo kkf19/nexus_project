@@ -548,7 +548,17 @@ def _build_resource_measurements(
             "period": period,
             "geography": geography,
             "layer": "SEMANTIC_INTERPRETATION",
-            "source": {"origin": "engine", "document_id": submission.submission_id,
+            # (A7) origin="submission", PAS "engine" : cette mesure est calculee
+            # UNE FOIS a la confirmation de la fiche (benevoles x duree, D-30),
+            # ce n'est PAS un agregat produit par aggregation_engine.aggregate()
+            # (celui-la seul justifie l'exclusion "source_origin == 'engine'"
+            # d'aggregation_service._select_candidate_rows, qui sert a ne
+            # jamais reinjecter un agregat deja calcule comme mesure d'entree).
+            # Bug latent corrige ici (A7) : avec "engine", VOLUNTEER_HOURS
+            # etait exclu de TOUTE agregation, pour TOUS les projets, depuis
+            # A3 -- jamais detecte faute de test bout-en-bout sur le tableau
+            # de bord avant test_a7.py.
+            "source": {"origin": "submission", "document_id": submission.submission_id,
                        "submitted_at": submission.submitted_at.isoformat()
                        if submission.submitted_at else None},
             "derivation": [{

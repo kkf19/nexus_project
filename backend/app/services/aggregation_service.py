@@ -403,6 +403,310 @@ def get_dashboard(db: Session, *, view: str, scope_organization_id: str | None,
 
 
 # ---------------------------------------------------------------------------
+# A7 — GET /dashboards/{view}/overview (impact-science.md §7, D-29)
+#
+# Nouveau endpoint, additif : /dashboards/{view} (Annexe A #10 ci-dessus)
+# reste inchange et garde exactement son contrat. Celui-ci fournit en plus
+# les donnees des ecrans 2 et 3 (un bloc par Area, un bloc par ODD), que le
+# moteur d'agregation ne peut PAS produire lui-meme : il agrege des VALEURS
+# de mesure (bénévoles, heures, personnes touchees...), jamais des
+# identites de projet. "Un projet multi-Area apparait dans chaque bloc,
+# compte une fois au global" (D-29) est un simple COUNT(DISTINCT
+# project_id) SQL sur les tables project_* (ajoutees en A2) -- ce n'est pas
+# une regle d'eligibilite/agregation, donc ca n'a pas sa place dans
+# aggregation_engine.py (jamais modifie, dev-brief.md §8).
+#
+# Pour les nombres (ressources/impact/portee) : reutilisation stricte de
+# engine_service.aggregate() (meme moteur, memes fonctions que
+# run_aggregation ci-dessus), mais SANS ecriture en base -- ces
+# decoupages par Area/ODD ne sont pas "l'execution officielle" que
+# /dashboards/{view} persiste (AggregateRun) ; les rejouer a chaque
+# chargement d'ecran ne doit pas empiler des dizaines de lignes
+# d'audit par vue.
+# ---------------------------------------------------------------------------
+def _active_taxonomy_content(db: Session) -> dict:
+    release = db.execute(
+        select(models.TaxonomyRelease).where(models.TaxonomyRelease.is_active.is_(True))
+    ).scalars().first()
+    if not release:
+        raise AggregationError("aucune taxonomie active en base", status_code=500)
+    return release.content
+
+
+def _run_aggregation_readonly(db: Session, *, view: str, scope_organization_id: str | None,
+                               filters: dict) -> tuple[list[dict], list[dict]]:
+    """Meme calcul que run_aggregation() ci-dessus (memes fonctions
+    reutilisees : _select_candidate_rows, mo_builder, engine_service.aggregate,
+    _build_subject_and_period), mais en lecture seule (aucun db.add/commit,
+    aucune ligne AggregateRun/Measurement/Refusal ecrite). Duplique
+    volontairement quelques lignes de run_aggregation plutot que de le
+    modifier : celui-ci sert deja /dashboards/{view} en production, on ne
+    prend pas le risque d'une regression dessus pour un besoin different."""
+    rows = _select_candidate_rows(db, view, scope_organization_id, filters)
+    mo_list = [mo_builder.row_to_measurement_object(db, r) for r in rows]
+    mo_list = [m for m in mo_list if not m.get("parent_measurement_ids")]
+    mo_by_id = {m["measurement_id"]: m for m in mo_list}
+
+    result = engine_service.aggregate(mo_list, group_by="network", total_units=None)
+
+    aggregate_dicts: list[dict] = []
+    for a in result.aggregates:
+        subject, period = _build_subject_and_period(
+            a, mo_by_id, group_by="network", view=view, scope_organization_id=scope_organization_id,
+        )
+        mo = a.to_measurement_object(f"PREVIEW-{uuid.uuid4().hex[:12]}", subject, period)
+        aggregate_dicts.append(mo)
+
+    refusal_dicts: list[dict] = []
+    for _mid, refusal in result.excluded:
+        refusal_dicts.append({
+            "refusal_id": None, "reason": refusal.reason, "measurement_ids": refusal.measurement_ids,
+            "detail": refusal.detail or None, "explanation_fr": refusal.explain(),
+        })
+    for refusal in result.refusals:
+        refusal_dicts.append({
+            "refusal_id": None, "reason": refusal.reason, "measurement_ids": refusal.measurement_ids,
+            "detail": refusal.detail or None, "explanation_fr": refusal.explain(),
+        })
+    return aggregate_dicts, refusal_dicts
+
+
+def _project_scope_ids(db: Session, view: str, scope_organization_id: str | None, filters: dict) -> set[str]:
+    """Projets dans le perimetre (organisation + annee) -- reutilise par
+    tous les comptages de projets distincts ci-dessous. Independant de
+    _select_candidate_rows (qui filtre des MESURES) : ici on filtre des
+    PROJETS, sur les colonnes du meme nom sur `project`."""
+    org_ids = _scope_organization_ids(db, view, scope_organization_id)
+    stmt = select(models.Project.project_id)
+    if org_ids is not None:
+        if not org_ids:
+            return set()
+        stmt = stmt.where(models.Project.organization_id.in_(org_ids))
+    reporting_year = filters.get("reporting_year")
+    if reporting_year is not None:
+        stmt = stmt.where(models.Project.reporting_year == int(reporting_year))
+    return set(db.execute(stmt).scalars().all())
+
+
+def get_projects_overview(db: Session, *, view: str, scope_organization_id: str | None,
+                           filters: dict | None = None) -> dict:
+    """Ecran 1 (impact-science.md §7) : vue d'ensemble. Les nombres de
+    ressources/impact/portee restent dans `aggregates[]` (memes objets que
+    /dashboards/{view}, a reclasser cote frontend avec classify.ts comme
+    aujourd'hui) ; ce que cette fonction ajoute est ce que le moteur ne
+    calcule pas : projets uniques, projets avec resultat mesure, projets
+    RISE et leur % parmi les projets Community Impact, pays/OL actifs."""
+    filters = dict(filters or {})
+    if view not in VIEWS:
+        raise AggregationError(f"vue inconnue : {view!r} (attendu : {', '.join(VIEWS)})")
+    if view != "global" and scope_organization_id and not db.get(models.Organization, scope_organization_id):
+        raise AggregationError(f"organisation introuvable : {scope_organization_id}", status_code=404)
+
+    project_ids = _project_scope_ids(db, view, scope_organization_id, filters)
+    total_projects = len(project_ids)
+
+    measured = 0
+    rise_yes = 0
+    ci_projects = 0
+    countries: set[str] = set()
+    ols: set[str] = set()
+    if project_ids:
+        rows = db.execute(
+            select(models.Project.outcome_status, models.Project.rise_status, models.Project.organization_id)
+            .where(models.Project.project_id.in_(project_ids))
+        ).all()
+        org_cache: dict[str, models.Organization | None] = {}
+        for outcome_status, rise_status, org_id in rows:
+            if outcome_status == "measured":
+                measured += 1
+            if rise_status == "yes":
+                rise_yes += 1
+            ols.add(org_id)
+            if org_id not in org_cache:
+                org_cache[org_id] = db.get(models.Organization, org_id)
+            org = org_cache[org_id]
+            if org and org.country_iso2:
+                countries.add(org.country_iso2)
+        ci_projects = len(set(db.execute(
+            select(models.ProjectAreaOfOpportunity.project_id).where(
+                models.ProjectAreaOfOpportunity.project_id.in_(project_ids),
+                models.ProjectAreaOfOpportunity.code == "CI",
+            )
+        ).scalars().all()))
+
+    aggregate_dicts, refusal_dicts = _run_aggregation_readonly(
+        db, view=view, scope_organization_id=scope_organization_id, filters=filters,
+    )
+
+    return {
+        "total_projects": total_projects,
+        "projects_measured": measured,
+        "rise_projects": rise_yes,
+        "rise_pct_of_ci": round(100 * rise_yes / ci_projects, 1) if ci_projects else None,
+        "countries_active": len(countries),
+        "ols_active": len(ols),
+        "aggregates": aggregate_dicts,
+        "refusals": refusal_dicts,
+    }
+
+
+def get_area_breakdown(db: Session, *, view: str, scope_organization_id: str | None,
+                        filters: dict | None = None) -> list[dict]:
+    """Ecran 2 (impact-science.md §7) : un bloc par Area. Regle D-29 : "un
+    projet multi-Area apparait dans chaque bloc de ses Areas... la somme
+    des 4 blocs n'est jamais affichee comme un total" -- chaque bloc est
+    calcule independamment, aucune addition entre blocs n'est faite ici, et
+    le total global vient de get_projects_overview (projets uniques), pas
+    d'une somme de ces blocs."""
+    filters = dict(filters or {})
+    taxonomy_content = _active_taxonomy_content(db)
+    area_defs = taxonomy_content["classification_axes"]["area_of_opportunity"]["values"]
+    fam_label_by_code = {
+        f["code"]: f.get("label", f["code"])
+        for f in taxonomy_content["classification_axes"]["activity_family"]["values"]
+    }
+
+    scoped_project_ids = _project_scope_ids(db, view, scope_organization_id, filters)
+
+    blocks: list[dict] = []
+    for area_def in area_defs:
+        code = area_def["code"]
+        area_project_ids: set[str] = set()
+        secondary_only: set[str] = set()
+        if scoped_project_ids:
+            rows = db.execute(
+                select(models.ProjectAreaOfOpportunity.project_id, models.ProjectAreaOfOpportunity.role)
+                .where(models.ProjectAreaOfOpportunity.project_id.in_(scoped_project_ids),
+                       models.ProjectAreaOfOpportunity.code == code)
+            ).all()
+            area_project_ids = {pid for pid, _role in rows}
+            secondary_only = {pid for pid, role in rows if role == "secondary"}
+
+        families: list[dict] = []
+        rise_block: dict | None = None
+        top_sdgs: list[dict] = []
+        if area_project_ids:
+            fam_counts: dict[str, set[str]] = {}
+            for fam_code, pid in db.execute(
+                select(models.ProjectActivityFamily.code, models.ProjectActivityFamily.project_id)
+                .where(models.ProjectActivityFamily.project_id.in_(area_project_ids))
+            ).all():
+                fam_counts.setdefault(fam_code, set()).add(pid)
+            families = sorted(
+                ({"code": c, "label": fam_label_by_code.get(c, c), "project_count": len(pids)}
+                 for c, pids in fam_counts.items()),
+                key=lambda x: -x["project_count"],
+            )
+
+            if code == "CI":
+                rise_statuses = db.execute(
+                    select(models.Project.rise_status).where(models.Project.project_id.in_(area_project_ids))
+                ).scalars().all()
+                pillar_counts: dict[str, set[str]] = {}
+                for pcode, pid in db.execute(
+                    select(models.ProjectRisePillar.code, models.ProjectRisePillar.project_id)
+                    .where(models.ProjectRisePillar.project_id.in_(area_project_ids))
+                ).all():
+                    pillar_counts.setdefault(pcode, set()).add(pid)
+                rise_block = {
+                    "yes": sum(1 for s in rise_statuses if s == "yes"),
+                    "no": sum(1 for s in rise_statuses if s == "no"),
+                    "pillars": [{"code": c, "project_count": len(pids)} for c, pids in pillar_counts.items()],
+                }
+                sdg_counts: dict[int, set[str]] = {}
+                for goal, pid in db.execute(
+                    select(models.ProjectSdg.goal, models.ProjectSdg.project_id)
+                    .where(models.ProjectSdg.project_id.in_(area_project_ids))
+                ).all():
+                    sdg_counts.setdefault(goal, set()).add(pid)
+                top_sdgs = sorted(
+                    ({"goal": g, "project_count": len(pids)} for g, pids in sdg_counts.items()),
+                    key=lambda x: -x["project_count"],
+                )[:3]
+
+        aggregate_dicts, refusal_dicts = _run_aggregation_readonly(
+            db, view=view, scope_organization_id=scope_organization_id,
+            filters={**filters, "area_of_opportunity": code},
+        )
+
+        blocks.append({
+            "code": code,
+            "label": area_def.get("label", code),
+            "total_projects": len(area_project_ids),
+            "secondary_only_count": len(secondary_only),
+            "families": families,
+            "rise": rise_block,
+            "top_sdgs": top_sdgs,
+            "aggregates": aggregate_dicts,
+            "refusals": refusal_dicts,
+        })
+    return blocks
+
+
+def get_sdg_breakdown(db: Session, *, view: str, scope_organization_id: str | None,
+                       filters: dict | None = None) -> list[dict]:
+    """Ecran 3 (impact-science.md §7) : un bloc par ODD (seuls les ODD avec
+    au moins 1 projet sont renvoyes). Principal et secondaire toujours
+    separes (jamais additionnes en un seul total, meme logique que D-26/D-27
+    pour ne jamais gommer ce qu'un projet a declare comme accessoire)."""
+    filters = dict(filters or {})
+    scoped_project_ids = _project_scope_ids(db, view, scope_organization_id, filters)
+    if not scoped_project_ids:
+        return []
+
+    by_goal: dict[int, dict[str, set[str]]] = {}
+    for goal, role, pid in db.execute(
+        select(models.ProjectSdg.goal, models.ProjectSdg.role, models.ProjectSdg.project_id)
+        .where(models.ProjectSdg.project_id.in_(scoped_project_ids))
+    ).all():
+        by_goal.setdefault(goal, {"primary": set(), "secondary": set()}).setdefault(role, set()).add(pid)
+
+    blocks: list[dict] = []
+    for goal in sorted(by_goal):
+        primary_ids = by_goal[goal].get("primary", set())
+        secondary_ids = by_goal[goal].get("secondary", set())
+        all_ids = primary_ids | secondary_ids
+        measured = 0
+        if all_ids:
+            statuses = db.execute(
+                select(models.Project.outcome_status).where(models.Project.project_id.in_(all_ids))
+            ).scalars().all()
+            measured = sum(1 for s in statuses if s == "measured")
+
+        aggregate_dicts, _refusal_dicts = _run_aggregation_readonly(
+            db, view=view, scope_organization_id=scope_organization_id,
+            filters={**filters, "sdg": goal},
+        )
+        blocks.append({
+            "goal": goal,
+            "primary_count": len(primary_ids),
+            "secondary_count": len(secondary_ids),
+            "projects_measured": measured,
+            "aggregates": aggregate_dicts,
+        })
+    return blocks
+
+
+def get_dashboard_overview(db: Session, *, view: str, scope_organization_id: str | None,
+                            filters: dict | None = None) -> dict:
+    """Assemble les 3 ecrans en un seul appel (Annexe A, nouveau point
+    d'entree #10bis : `GET /dashboards/{view}/overview`)."""
+    filters = dict(filters or {})
+    overview = get_projects_overview(db, view=view, scope_organization_id=scope_organization_id, filters=filters)
+    areas = get_area_breakdown(db, view=view, scope_organization_id=scope_organization_id, filters=filters)
+    sdgs = get_sdg_breakdown(db, view=view, scope_organization_id=scope_organization_id, filters=filters)
+    return {
+        "view": view,
+        "scope_organization_id": scope_organization_id,
+        "filters": filters,
+        "computed_at": datetime.now(timezone.utc).isoformat(),
+        "overview": overview,
+        "areas": areas,
+        "sdgs": sdgs,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Annexe A #12 — POST /aggregations/check-pair
 # ---------------------------------------------------------------------------
 def check_pair(db: Session, measurement_id_a: str, measurement_id_b: str) -> dict:

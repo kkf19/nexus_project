@@ -66,6 +66,32 @@ def get_dashboards_view(
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
+@router.get("/dashboards/{view}/overview")
+def get_dashboards_view_overview(
+    view: str,
+    scope_organization_id: str | None = Query(default=None),
+    reporting_year: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    """Nouveau (A7, impact-science.md §7 / D-29) : données prêtes pour les 3
+    écrans du tableau de bord. Complémentaire à /dashboards/{view} ci-dessus
+    (Annexe A #10, inchangé) : les nombres (ressources / impact / portée)
+    restent calculés par le même moteur réutilisé, en lecture seule ici
+    (aucun AggregateRun écrit par cet endpoint — voir
+    aggregation_service._run_aggregation_readonly) ; ce qui s'y ajoute est
+    un pur comptage de projets distincts par Area / famille / ODD / RISE,
+    que le moteur ne peut pas produire lui-même (il agrège des valeurs de
+    mesure, jamais des identités de projet)."""
+    filters = {"reporting_year": reporting_year}
+    filters = {k: v for k, v in filters.items() if v is not None}
+    try:
+        return aggregation_service.get_dashboard_overview(
+            db, view=view, scope_organization_id=scope_organization_id, filters=filters,
+        )
+    except aggregation_service.AggregationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
 @router.get("/trace/{measurement_id}")
 def get_trace(measurement_id: str, db: Session = Depends(get_db)):
     """Annexe A #11 : chaîne complète jusqu'à `raw_text`, citation surlignée,
