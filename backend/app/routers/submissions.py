@@ -164,40 +164,27 @@ def retry_submission(submission_id: str, db: Session = Depends(get_db)):
     return submission
 
 
-@router.post("/{submission_id}/confirm")
+@router.post("/{submission_id}/confirm", response_model=ConfirmResult)
 def confirm_submission(submission_id: str, payload: ConfirmRequest, db: Session = Depends(get_db)):
     """Annexe A #5. Ecrit project + measurements en une seule transaction
     (dev-brief section 3.2). Si un seul MO echoue la validation, RIEN n'est
-    ecrit (422 avec le detail des erreurs).
-
-    Diagnostic temporaire (deploiement) : toute la fonction est entouree
-    d'un unique try/except qui renvoie une JSONResponse construite a la
-    main (jamais via HTTPException/response_model), pour ecarter tout
-    probleme de serialisation cote framework le temps de stabiliser ce
-    tout nouvel endpoint en production."""
-    import traceback
-
-    from fastapi.responses import JSONResponse
-
+    ecrit (422 avec le detail des erreurs, un par candidat)."""
+    submission = db.get(Submission, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="submission introuvable")
+    if submission.pipeline_status != "awaiting_confirmation":
+        raise HTTPException(
+            status_code=409,
+            detail=f"submission non prete pour confirmation (statut actuel : {submission.pipeline_status})",
+        )
     try:
-        submission = db.get(Submission, submission_id)
-        if not submission:
-            return JSONResponse(status_code=404, content={"detail": "submission introuvable"})
-        if submission.pipeline_status != "awaiting_confirmation":
-            return JSONResponse(status_code=409, content={
-                "detail": f"submission non prete pour confirmation (statut actuel : {submission.pipeline_status})",
-            })
-        try:
-            project_id, measurement_ids = confirm_service.confirm_submission(db, submission, payload)
-        except confirm_service.ConfirmError as exc:
-            db.rollback()
-            return JSONResponse(status_code=422, content={"errors": exc.errors})
-        db.commit()
-        return {"project_id": project_id, "measurement_ids": measurement_ids}
+        project_id, measurement_ids = confirm_service.confirm_submission(db, submission, payload)
+    except confirm_service.ConfirmError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail={"errors": exc.errors}) from exc
     except Exception as exc:
         db.rollback()
         logger.exception("Echec inattendu de confirmation (submission_id=%s)", submission_id)
-        return JSONResponse(status_code=500, content={
-            "message": str(exc),
-            "traceback": traceback.format_exc(),
-        })
+        raise HTTPException(status_code=500, detail="Impossible de confirmer la fiche pour le moment.") from exc
+    db.commit()
+    return {"project_id": project_id, "measurement_ids": measurement_ids}
