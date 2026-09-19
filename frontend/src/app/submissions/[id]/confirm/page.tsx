@@ -12,23 +12,41 @@ import {
   getTaxonomy,
 } from "@/lib/api";
 import { DEMO_USER_ID } from "@/lib/config";
-import ChipMultiSelect from "@/components/ChipMultiSelect";
+import ActivityFamilySelector from "@/components/ActivityFamilySelector";
+import AreaSelector from "@/components/AreaSelector";
+import RiseBlock from "@/components/RiseBlock";
 import CandidateCard from "@/components/CandidateCard";
 import SdgSelector from "@/components/SdgSelector";
-import OriginBadge from "@/components/OriginBadge";
+import OriginBadge, { type Origin } from "@/components/OriginBadge";
 import type {
   CandidateMapping,
+  ConfirmActivityFamilyInput,
+  ConfirmAreaInput,
   ConfirmCandidateInput,
   ConfirmErrorItem,
   ConfirmRequestBody,
   ConfirmResult,
+  ConfirmRiseInput,
   ConfirmSdgInput,
   ExtractionPayload,
   MappingPayload,
   TaxonomyContent,
+  ValueOriginQuote,
 } from "@/lib/types";
 
 type Phase = "loading" | "ready" | "not_ready" | "error" | "already_confirmed" | "success";
+
+function isOtherCode(code: string): boolean {
+  return code.endsWith("_OTHER") || code === "OTHER";
+}
+
+/** Origine d'un champ ressource {value,origin,quote} : "à remplir" si la
+ * responsable n'a encore rien saisi, sinon l'origine de l'extraction
+ * (impact-science.md §6, A6 : chaque champ porte son origine). */
+function fieldOrigin(extracted: ValueOriginQuote<number> | undefined, currentStr: string): Origin {
+  if (currentStr.trim() === "") return "to_fill";
+  return extracted?.origin === "quoted" ? "written" : "inferred";
+}
 
 export default function ConfirmPage() {
   const params = useParams<{ id: string }>();
@@ -45,17 +63,22 @@ export default function ConfirmPage() {
   const [reportingYear, setReportingYear] = useState<number>(new Date().getFullYear());
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
-  const [areaOfOpportunity, setAreaOfOpportunity] = useState<string[]>([]);
-  const [programme, setProgramme] = useState<string[]>([]);
-  const [risePillars, setRisePillars] = useState<string[]>([]);
+
+  const [activityFamilies, setActivityFamilies] = useState<ConfirmActivityFamilyInput[]>([]);
+  const [areas, setAreas] = useState<ConfirmAreaInput[]>([]);
+  const [rise, setRise] = useState<ConfirmRiseInput>({ status: "not_applicable", pillars: [] });
   const [sdgs, setSdgs] = useState<ConfirmSdgInput[]>([]);
   const [overrides, setOverrides] = useState<Record<string, ConfirmCandidateInput>>({});
+
+  // Ressources (D-25/D-28/D-30) : bénévoles JCI, durée, heures pré-calculées.
+  const [volunteersStr, setVolunteersStr] = useState("");
+  const [durationStr, setDurationStr] = useState("");
+  const [hoursStr, setHoursStr] = useState("");
+  const [hoursCorrected, setHoursCorrected] = useState(false);
 
   const [outcomeChoice, setOutcomeChoice] = useState<"pending_follow_up" | "none" | null>(null);
   const [expectedOutcome, setExpectedOutcome] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
-
-  const [confirmations, setConfirmations] = useState({ C1: false, C2: false, C3: false, C4: false });
 
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -110,11 +133,17 @@ export default function ConfirmPage() {
         setPeriodStart(extractionPayload.project?.period?.start || "");
         setPeriodEnd(extractionPayload.project?.period?.end || "");
 
+        const volunteersValue = extractionPayload.project?.jci_volunteers_count?.value;
+        const durationValue = extractionPayload.project?.activity_duration_hours?.value;
+        setVolunteersStr(volunteersValue != null ? String(volunteersValue) : "");
+        setDurationStr(durationValue != null ? String(durationValue) : "");
+        setHoursCorrected(false);
+
         const pc = mappingPayload.project_classification;
-        setAreaOfOpportunity(pc.area_of_opportunity.map((a) => a.code));
-        setProgramme(pc.programme.map((p) => p.code));
-        setRisePillars(pc.rise_pillars.map((r) => (typeof r === "string" ? r : r.code)));
-        setSdgs(pc.sdgs.map((s) => ({ goal: s.goal, role: s.role })));
+        setActivityFamilies(pc.activity_families.map((f) => ({ code: f.code, other_label: f.other_label })));
+        setAreas(pc.area_of_opportunity.map((a) => ({ code: a.code, role: a.role })));
+        setRise({ status: pc.rise.status, pillars: pc.rise.pillars.map((p) => p.code) });
+        setSdgs(pc.sdgs.map((s) => ({ goal: s.goal, role: s.role, justification: s.justification })));
 
         const initialOverrides: Record<string, ConfirmCandidateInput> = {};
         for (const cand of extractionPayload.candidates) {
@@ -123,6 +152,8 @@ export default function ConfirmPage() {
             candidate_id: cand.candidate_id,
             include: true,
             value: null,
+            value_internal: null,
+            value_external: null,
             count_type: null,
             internal_external: null,
             corrected: false,
@@ -141,6 +172,29 @@ export default function ConfirmPage() {
       cancelled = true;
     };
   }, [submissionId]);
+
+  // D-24/AC-17 : décocher Community Impact (CI) ramène RISE à not_applicable
+  // et efface les piliers, sans attendre une action supplémentaire du SG.
+  useEffect(() => {
+    const ciPresent = areas.some((a) => a.code === "CI");
+    if (!ciPresent && rise.status !== "not_applicable") {
+      setRise({ status: "not_applicable", pillars: [] });
+    }
+  }, [areas, rise.status]);
+
+  // D-30 : les heures se recalculent automatiquement (bénévoles × durée)
+  // tant que le SG ne les a pas corrigées lui-même. Une fois corrigées,
+  // elles ne sont plus jamais recalculées silencieusement à sa place.
+  useEffect(() => {
+    if (hoursCorrected) return;
+    const v = Number(volunteersStr);
+    const d = Number(durationStr);
+    if (volunteersStr.trim() !== "" && durationStr.trim() !== "" && !Number.isNaN(v) && !Number.isNaN(d)) {
+      setHoursStr(String(v * d));
+    } else {
+      setHoursStr("");
+    }
+  }, [volunteersStr, durationStr, hoursCorrected]);
 
   const mappingById = useMemo(() => {
     const map: Record<string, CandidateMapping> = {};
@@ -162,25 +216,38 @@ export default function ConfirmPage() {
     (c) => overrides[c.extraction.candidate_id]?.include && c.mapping.iaooi_value === "OUTCOME"
   );
 
-  const c4Satisfied = hasOutcomeCandidate
-    ? confirmations.C4
-    : outcomeChoice === "none" ||
-      (outcomeChoice === "pending_follow_up" && expectedOutcome.trim() !== "" && followUpDate !== "");
+  const ciPresent = areas.some((a) => a.code === "CI");
+  const primaryAreaCount = areas.filter((a) => a.role === "primary").length;
+  const primarySdgCount = sdgs.filter((s) => s.role === "primary").length;
 
-  const primaryCount = sdgs.filter((s) => s.role === "primary").length;
-  const riseSelected = programme.includes("RISE");
-  const includedCount = Object.values(overrides).filter((o) => o.include).length;
+  const familiesOk =
+    activityFamilies.length > 0 &&
+    activityFamilies.every((f) => !isOtherCode(f.code) || (f.other_label ?? "").trim() !== "");
+  const areasOk = areas.length > 0 && primaryAreaCount === 1;
+  const riseOk = ciPresent
+    ? rise.status !== "not_applicable" && (rise.status !== "yes" || rise.pillars.length > 0)
+    : rise.status === "not_applicable";
+  const sdgsOk = sdgs.length > 0 && primarySdgCount === 1 && sdgs.every((s) => s.justification.trim() !== "");
+  const resourcesOk =
+    volunteersStr.trim() !== "" &&
+    durationStr.trim() !== "" &&
+    hoursStr.trim() !== "" &&
+    !Number.isNaN(Number(volunteersStr)) &&
+    !Number.isNaN(Number(durationStr)) &&
+    !Number.isNaN(Number(hoursStr));
+  const mixedOk = Object.values(overrides).every((o) => {
+    if (!o.include) return true;
+    const ie = o.internal_external ?? mappingById[o.candidate_id]?.internal_external;
+    if (ie !== "mixed") return true;
+    return o.value_internal != null && o.value_external != null;
+  });
+  const outcomeOk =
+    hasOutcomeCandidate ||
+    outcomeChoice === "none" ||
+    (outcomeChoice === "pending_follow_up" && expectedOutcome.trim() !== "" && followUpDate !== "");
 
   const canSubmit =
-    confirmations.C1 &&
-    confirmations.C2 &&
-    confirmations.C3 &&
-    c4Satisfied &&
-    areaOfOpportunity.length > 0 &&
-    primaryCount === 1 &&
-    (!riseSelected || risePillars.length > 0) &&
-    includedCount > 0 &&
-    !submitting;
+    familiesOk && areasOk && riseOk && sdgsOk && resourcesOk && mixedOk && outcomeOk && !submitting;
 
   function updateOverride(candidateId: string, next: ConfirmCandidateInput) {
     setOverrides((prev) => ({ ...prev, [candidateId]: next }));
@@ -199,9 +266,17 @@ export default function ConfirmPage() {
         outcome_status: hasOutcomeCandidate ? "measured" : (outcomeChoice as "pending_follow_up" | "none"),
         expected_outcome: outcomeChoice === "pending_follow_up" ? expectedOutcome : null,
         follow_up_date: outcomeChoice === "pending_follow_up" ? followUpDate : null,
+        jci_volunteers_count: Number(volunteersStr),
+        activity_duration_hours: Number(durationStr),
+        volunteer_hours: Number(hoursStr),
+        volunteer_hours_corrected: hoursCorrected,
       },
-      axes: { area_of_opportunity: areaOfOpportunity, programme, rise_pillars: risePillars, sdgs },
-      confirmations: { ...confirmations, C4: c4Satisfied },
+      axes: {
+        activity_families: activityFamilies,
+        area_of_opportunity: areas,
+        rise,
+        sdgs,
+      },
       candidates: Object.values(overrides),
       confirmed_by: DEMO_USER_ID,
     };
@@ -360,59 +435,50 @@ export default function ConfirmPage() {
         )}
       </section>
 
-      {/* Axe A */}
+      {/* 1. Quoi */}
       <section className="rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Domaine d&apos;intervention
-          </h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Quoi</h2>
           <OriginBadge origin="inferred" />
         </div>
+        <p className="mt-1 text-xs text-muted">La ou les familles d&apos;activité de ce projet.</p>
         <div className="mt-3">
-          <ChipMultiSelect
-            options={taxAxes.area_of_opportunity.values}
-            selected={areaOfOpportunity}
-            onChange={setAreaOfOpportunity}
+          <ActivityFamilySelector
+            options={taxAxes.activity_family.values}
+            value={activityFamilies}
+            onChange={setActivityFamilies}
           />
         </div>
-        {areaOfOpportunity.length === 0 && (
-          <p className="mt-2 text-xs text-danger">Au moins un domaine est requis.</p>
+        {activityFamilies.length === 0 && (
+          <p className="mt-2 text-xs text-danger">Au moins une famille d&apos;activité est requise.</p>
         )}
       </section>
 
-      {/* Axe B */}
+      {/* 2. Où */}
       <section className="rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Programme</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Où</h2>
           <OriginBadge origin="inferred" />
         </div>
-        <p className="mt-1 text-xs text-muted">Laissez vide si le projet ne relève d&apos;aucun programme mondial.</p>
+        <p className="mt-1 text-xs text-muted">Domaine(s) d&apos;intervention JCI, avec exactement un principal.</p>
         <div className="mt-3">
-          <ChipMultiSelect options={taxAxes.programme.values} selected={programme} onChange={setProgramme} />
+          <AreaSelector options={taxAxes.area_of_opportunity.values} value={areas} onChange={setAreas} />
         </div>
-        {riseSelected && (
-          <div className="mt-4 border-t border-border pt-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Piliers RISE</h3>
-              <OriginBadge origin="inferred" />
-            </div>
-            <div className="mt-2">
-              <ChipMultiSelect
-                options={taxonomy!.rise_pillars.values}
-                selected={risePillars}
-                onChange={setRisePillars}
-              />
-            </div>
-            {risePillars.length === 0 && (
-              <p className="mt-2 text-xs text-danger">
-                Au moins un pilier RISE est requis puisque RISE est coché.
-              </p>
-            )}
-          </div>
+        {!areasOk && (
+          <p className="mt-2 text-xs text-danger">
+            {areas.length === 0
+              ? "Au moins un domaine est requis."
+              : `Exactement un domaine « principal » est requis (actuellement : ${primaryAreaCount}).`}
+          </p>
         )}
       </section>
 
-      {/* Axe C */}
+      {/* 3. RISE (visible seulement si CI est coché) */}
+      {ciPresent && (
+        <RiseBlock pillarOptions={taxonomy!.rise_pillars.values} value={rise} onChange={setRise} />
+      )}
+
+      {/* 4. ODD */}
       <section className="rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
@@ -420,20 +486,27 @@ export default function ConfirmPage() {
           </h2>
           <OriginBadge origin="inferred" />
         </div>
-        <p className="mt-1 text-xs text-muted">Exactement un ODD principal.</p>
-        <div className="mt-3 max-h-72 overflow-y-auto pr-1">
+        <p className="mt-1 text-xs text-muted">
+          Aucun plafond : tout ODD réellement touché peut être coché, à condition d&apos;être justifié.
+          Exactement un ODD principal.
+        </p>
+        <div className="mt-3 max-h-96 overflow-y-auto pr-1">
           <SdgSelector value={sdgs} onChange={setSdgs} />
         </div>
-        {primaryCount !== 1 && (
+        {!sdgsOk && (
           <p className="mt-2 text-xs text-danger">
-            Exactement un ODD principal est requis (actuellement : {primaryCount}).
+            {sdgs.length === 0
+              ? "Au moins un ODD est requis."
+              : primarySdgCount !== 1
+              ? `Exactement un ODD principal est requis (actuellement : ${primarySdgCount}).`
+              : "Une justification est requise pour chaque ODD retenu."}
           </p>
         )}
       </section>
 
-      {/* Chiffres */}
+      {/* 5. Pour qui */}
       <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Les chiffres</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Pour qui</h2>
         <div className="mt-3 space-y-3">
           {mainCandidates.map(({ extraction: cand, mapping: map }) => (
             <CandidateCard
@@ -447,43 +520,101 @@ export default function ConfirmPage() {
             />
           ))}
         </div>
+        {audienceCandidates.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Classé à part — non compté comme bénéficiaires
+            </h3>
+            <div className="mt-3 space-y-3">
+              {audienceCandidates.map(({ extraction: cand, mapping: map }) => (
+                <CandidateCard
+                  key={cand.candidate_id}
+                  extraction={cand}
+                  mapping={map}
+                  rawText={rawText}
+                  override={overrides[cand.candidate_id]}
+                  onChange={(next) => updateOverride(cand.candidate_id, next)}
+                  errorMessage={fieldErrors[cand.candidate_id]}
+                  accent="border-border bg-background"
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
-      {/* Bloc à part : audience */}
-      {audienceCandidates.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Classé à part — non compté comme bénéficiaires
-          </h2>
-          <div className="mt-3 space-y-3">
-            {audienceCandidates.map(({ extraction: cand, mapping: map }) => (
-              <CandidateCard
-                key={cand.candidate_id}
-                extraction={cand}
-                mapping={map}
-                rawText={rawText}
-                override={overrides[cand.candidate_id]}
-                onChange={(next) => updateOverride(cand.candidate_id, next)}
-                errorMessage={fieldErrors[cand.candidate_id]}
-                accent="border-border bg-background"
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Résultats mesurables (C4) */}
-      <section className="rounded-lg border border-success/40 bg-success-bg p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-success">Résultats mesurables</h2>
-        {hasOutcomeCandidate ? (
-          <label className="mt-3 flex items-center gap-2 text-sm">
+      {/* 6. Ressources */}
+      <section className="rounded-lg border border-border bg-surface p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Ressources</h2>
+        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <div>
+            <div className="mb-1 flex items-center gap-1">
+              <label className="text-xs text-muted">Bénévoles JCI</label>
+              <OriginBadge origin={fieldOrigin(extraction?.project?.jci_volunteers_count, volunteersStr)} />
+            </div>
             <input
-              type="checkbox"
-              checked={confirmations.C4}
-              onChange={(e) => setConfirmations((c) => ({ ...c, C4: e.target.checked }))}
+              type="number"
+              min={0}
+              value={volunteersStr}
+              onChange={(e) => setVolunteersStr(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
             />
-            Je confirme le(s) résultat(s) mesurable(s) ci-dessus (C4)
-          </label>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center gap-1">
+              <label className="text-xs text-muted">Durée de l&apos;activité (heures)</label>
+              <OriginBadge origin={fieldOrigin(extraction?.project?.activity_duration_hours, durationStr)} />
+            </div>
+            <input
+              type="number"
+              min={0}
+              value={durationStr}
+              onChange={(e) => setDurationStr(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <div className="mb-1 flex items-center gap-1">
+              <label className="text-xs text-muted">Heures de bénévolat</label>
+              <OriginBadge origin="calculated" />
+            </div>
+            <input
+              type="number"
+              min={0}
+              value={hoursStr}
+              onChange={(e) => {
+                setHoursStr(e.target.value);
+                setHoursCorrected(true);
+              }}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+        {(extraction?.project?.jci_volunteers_count?.quote || extraction?.project?.activity_duration_hours?.quote) && (
+          <p className="mt-2 text-xs text-muted">
+            {extraction?.project?.jci_volunteers_count?.quote && (
+              <>« {extraction.project.jci_volunteers_count.quote} » </>
+            )}
+            {extraction?.project?.activity_duration_hours?.quote && (
+              <>« {extraction.project.activity_duration_hours.quote} »</>
+            )}
+          </p>
+        )}
+        {!resourcesOk && (
+          <p className="mt-2 text-xs text-danger">
+            Bénévoles JCI, durée et heures de bénévolat sont obligatoires (0 est accepté, un champ vide ne
+            l&apos;est pas).
+          </p>
+        )}
+      </section>
+
+      {/* 7. Résultat */}
+      <section className="rounded-lg border border-success/40 bg-success-bg p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-success">Résultat</h2>
+        {hasOutcomeCandidate ? (
+          <p className="mt-3 text-sm">
+            Un résultat mesuré a été identifié dans les chiffres ci-dessus (« Pour qui »).
+          </p>
         ) : (
           <div className="mt-3 space-y-2 text-sm">
             <label className="flex items-center gap-2">
@@ -518,38 +649,10 @@ export default function ConfirmPage() {
                 checked={outcomeChoice === "none"}
                 onChange={() => setOutcomeChoice("none")}
               />
-              Aucun effet mesurable visé (C4)
+              Aucun effet mesurable visé
             </label>
           </div>
         )}
-      </section>
-
-      {/* Confirmations C1-C3 */}
-      <section className="rounded-lg border border-border bg-surface p-4 space-y-2 text-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={confirmations.C1}
-            onChange={(e) => setConfirmations((c) => ({ ...c, C1: e.target.checked }))}
-          />
-          Je confirme le mode de comptage de chaque chiffre ci-dessus (direct / indirect / audience) — C1
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={confirmations.C2}
-            onChange={(e) => setConfirmations((c) => ({ ...c, C2: e.target.checked }))}
-          />
-          Je confirme, pour chaque chiffre, s&apos;il concerne des membres JCI ou du public externe — C2
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={confirmations.C3}
-            onChange={(e) => setConfirmations((c) => ({ ...c, C3: e.target.checked }))}
-          />
-          Je confirme les ODD ci-dessus, avec exactement un objectif principal — C3
-        </label>
       </section>
 
       <button

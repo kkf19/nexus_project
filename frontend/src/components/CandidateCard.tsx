@@ -10,9 +10,13 @@ const COUNT_TYPES = [
   { value: "unknown", label: "inconnu" },
 ];
 
+// D-26 : la population "pour qui" peut être 100% membres JCI, 100% public
+// externe, ou "mixte" -- dans ce dernier cas AC-30 impose deux chiffres
+// distincts (jamais un seul chiffre additionné, R7).
 const INTERNAL_EXTERNAL = [
   { value: "internal", label: "membres JCI" },
   { value: "external", label: "public externe" },
+  { value: "mixed", label: "mixte (JCI + externe)" },
   { value: "unknown", label: "inconnu" },
 ];
 
@@ -36,9 +40,20 @@ export default function CandidateCard({
   const value = override.value ?? extraction.value;
   const countType = override.count_type ?? mapping.count_type;
   const internalExternal = override.internal_external ?? mapping.internal_external;
+  const isMixed = internalExternal === "mixed";
 
   function markCorrected(patch: Partial<ConfirmCandidateInput>) {
     onChange({ ...override, ...patch, corrected: true });
+  }
+
+  function changeInternalExternal(next: string) {
+    // En quittant "mixed" on efface les deux valeurs partielles pour ne pas
+    // laisser une ancienne saisie invisible resurgir si l'on revient à mixte.
+    if (next === "mixed") {
+      markCorrected({ internal_external: next });
+    } else {
+      markCorrected({ internal_external: next, value_internal: null, value_external: null });
+    }
   }
 
   return (
@@ -53,7 +68,7 @@ export default function CandidateCard({
           {mapping.source_wording_class || extraction.metric_label_source}
         </label>
         <span className="rounded-full bg-border/60 px-2 py-0.5 text-xs text-muted whitespace-nowrap">
-          {mapping.metric_code}
+          {mapping.metric_code ?? "non classé"}
         </span>
       </div>
 
@@ -66,24 +81,58 @@ export default function CandidateCard({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div>
-          <div className="mb-1 flex items-center gap-1">
-            <span className="text-xs text-muted">Valeur</span>
-            <OriginBadge origin="written" />
+        {!isMixed && (
+          <div>
+            <div className="mb-1 flex items-center gap-1">
+              <span className="text-xs text-muted">Valeur</span>
+              <OriginBadge origin={value === null ? "to_fill" : "written"} />
+            </div>
+            <input
+              type="number"
+              value={value ?? ""}
+              onChange={(e) =>
+                markCorrected({ value: e.target.value === "" ? null : Number(e.target.value) })
+              }
+              className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm"
+            />
           </div>
-          <input
-            type="number"
-            value={value ?? ""}
-            onChange={(e) =>
-              markCorrected({ value: e.target.value === "" ? null : Number(e.target.value) })
-            }
-            className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm"
-          />
-        </div>
+        )}
+        {isMixed && (
+          <>
+            <div>
+              <div className="mb-1 flex items-center gap-1">
+                <span className="text-xs text-muted">Membres JCI</span>
+                <OriginBadge origin={override.value_internal == null ? "to_fill" : "written"} />
+              </div>
+              <input
+                type="number"
+                value={override.value_internal ?? ""}
+                onChange={(e) =>
+                  markCorrected({ value_internal: e.target.value === "" ? null : Number(e.target.value) })
+                }
+                className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm"
+              />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-1">
+                <span className="text-xs text-muted">Public externe</span>
+                <OriginBadge origin={override.value_external == null ? "to_fill" : "written"} />
+              </div>
+              <input
+                type="number"
+                value={override.value_external ?? ""}
+                onChange={(e) =>
+                  markCorrected({ value_external: e.target.value === "" ? null : Number(e.target.value) })
+                }
+                className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm"
+              />
+            </div>
+          </>
+        )}
         <div>
           <div className="mb-1 flex items-center gap-1">
             <span className="text-xs text-muted">Unité</span>
-            <OriginBadge origin="account" />
+            <OriginBadge origin="inferred" />
           </div>
           <div className="rounded-md border border-border bg-background px-2 py-1 text-sm text-muted">
             {mapping.unit_code}
@@ -91,7 +140,7 @@ export default function CandidateCard({
         </div>
         <div>
           <div className="mb-1 flex items-center gap-1">
-            <span className="text-xs text-muted">Mode de comptage (C1)</span>
+            <span className="text-xs text-muted">Type de comptage</span>
             <OriginBadge origin="inferred" />
           </div>
           <select
@@ -108,12 +157,12 @@ export default function CandidateCard({
         </div>
         <div>
           <div className="mb-1 flex items-center gap-1">
-            <span className="text-xs text-muted">Population (C2)</span>
+            <span className="text-xs text-muted">Pour qui</span>
             <OriginBadge origin="inferred" />
           </div>
           <select
             value={internalExternal}
-            onChange={(e) => markCorrected({ internal_external: e.target.value })}
+            onChange={(e) => changeInternalExternal(e.target.value)}
             className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm"
           >
             {INTERNAL_EXTERNAL.map((o) => (
@@ -124,6 +173,12 @@ export default function CandidateCard({
           </select>
         </div>
       </div>
+
+      {isMixed && (
+        <p className="mt-2 text-xs text-muted">
+          Public mixte : les deux nombres sont enregistrés séparément et ne sont jamais additionnés (R7).
+        </p>
+      )}
 
       {extraction.definition_text && (
         <p className="mt-2 text-xs text-muted">Définition : {extraction.definition_text}</p>

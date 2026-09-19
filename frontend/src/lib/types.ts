@@ -1,6 +1,12 @@
 // Types partagés, alignés sur measurement-object.schema.json et les schémas
 // Pydantic du backend (backend/app/schemas.py). Volontairement permissifs
 // sur les champs profonds qu'on ne fait que ré-afficher tels quels.
+//
+// A6 (impact-science.md) : ces types suivent la nouvelle forme du pipeline
+// (A4) et de la confirmation (A5) -- famille d'activité en 1ère dimension,
+// Areas avec un rôle primary/secondary, RISE en objet {status, pillars},
+// ODD avec justification obligatoire. L'axe "programme" est retiré des
+// échanges frontend/backend (deprecated, D-23).
 
 export type Confidence = "H" | "M" | "L" | string;
 
@@ -13,8 +19,9 @@ export interface TaxonomyValue {
 export interface TaxonomyContent {
   meta: { version: string; [key: string]: unknown };
   classification_axes: {
+    activity_family: { values: TaxonomyValue[]; [key: string]: unknown };
     area_of_opportunity: { values: TaxonomyValue[]; [key: string]: unknown };
-    programme: { values: TaxonomyValue[]; [key: string]: unknown };
+    programme: { values: TaxonomyValue[]; status?: string; [key: string]: unknown };
     sdg: { [key: string]: unknown };
   };
   rise_pillars: { values: TaxonomyValue[]; [key: string]: unknown };
@@ -56,23 +63,33 @@ export interface ExtractionCandidate {
   confidence: Confidence;
 }
 
+// {value, origin, quote} -- forme partagée par project.name, .jci_volunteers_count
+// et .activity_duration_hours (ai_pipeline.py, A4).
+export interface ValueOriginQuote<T> {
+  value: T | null;
+  origin: "inferred" | "quoted";
+  quote: string | null;
+}
+
 export interface ExtractionPayload {
   language: string;
   project: {
-    name: { value: string | null; origin: string; quote: string | null };
+    name: ValueOriginQuote<string>;
     period: {
       start: string | null;
       end: string | null;
       reporting_year: number | null;
       quote: string | null;
     };
+    jci_volunteers_count: ValueOriginQuote<number>;
+    activity_duration_hours: ValueOriginQuote<number>;
   };
   candidates: ExtractionCandidate[];
 }
 
 export interface CandidateMapping {
   candidate_id: string;
-  metric_code: string;
+  metric_code: string | null;
   iaooi_value: "INPUT" | "ACTIVITY" | "OUTPUT" | "OUTCOME" | "IMPACT_CLAIM" | "CONTEXT" | "UNCERTAIN" | string;
   confidence: Confidence;
   unit_code: string;
@@ -90,13 +107,48 @@ export interface MappingRelation {
   candidate_id_b: string;
 }
 
+// project_classification (A4, impact-science.md) : famille -> Areas (1
+// principale) -> RISE (si CI) -> ODD, chaque valeur justifiée par une phrase
+// tirée du texte.
+export interface MappingActivityFamily {
+  code: string;
+  other_label: string | null;
+  confidence: Confidence;
+  justification: string;
+}
+
+export interface MappingArea {
+  code: string;
+  role: "primary" | "secondary";
+  confidence: Confidence;
+  justification: string;
+}
+
+export interface MappingRisePillar {
+  code: string;
+  confidence: Confidence;
+  justification: string;
+}
+
+export interface MappingRise {
+  status: "yes" | "no" | "not_applicable";
+  pillars: MappingRisePillar[];
+}
+
+export interface MappingSdg {
+  goal: number;
+  role: "primary" | "secondary";
+  confidence: Confidence;
+  justification: string;
+}
+
 export interface MappingPayload {
   project_classification: {
-    area_of_opportunity: { code: string; confidence: Confidence }[];
-    programme: { code: string; confidence: Confidence }[];
-    rise_pillars: (string | { code: string; confidence: Confidence })[];
-    sdgs: { goal: number; role: "primary" | "secondary"; confidence: Confidence }[];
-    activity_type: string[];
+    activity_families: MappingActivityFamily[];
+    area_of_opportunity: MappingArea[];
+    rise: MappingRise;
+    sdgs: MappingSdg[];
+    activity_type: string[]; // alias dérivé (compatibilité), pas ressaisi par l'IA
   };
   candidate_mappings: CandidateMapping[];
   relations: MappingRelation[];
@@ -113,15 +165,33 @@ export interface SubmissionDraft {
   }[];
 }
 
-export interface ConfirmSdgInput {
-  goal: number;
+// --- Corps envoyé à POST /submissions/{id}/confirm (A5) ---
+
+export interface ConfirmActivityFamilyInput {
+  code: string;
+  other_label: string | null;
+}
+
+export interface ConfirmAreaInput {
+  code: string;
   role: "primary" | "secondary";
 }
 
+export interface ConfirmRiseInput {
+  status: "yes" | "no" | "not_applicable";
+  pillars: string[];
+}
+
+export interface ConfirmSdgInput {
+  goal: number;
+  role: "primary" | "secondary";
+  justification: string;
+}
+
 export interface ConfirmAxesInput {
-  area_of_opportunity: string[];
-  programme: string[];
-  rise_pillars: string[];
+  activity_families: ConfirmActivityFamilyInput[];
+  area_of_opportunity: ConfirmAreaInput[];
+  rise: ConfirmRiseInput;
   sdgs: ConfirmSdgInput[];
 }
 
@@ -133,12 +203,18 @@ export interface ConfirmProjectInput {
   outcome_status: "measured" | "pending_follow_up" | "none";
   expected_outcome?: string | null;
   follow_up_date?: string | null;
+  jci_volunteers_count: number;
+  activity_duration_hours: number;
+  volunteer_hours: number;
+  volunteer_hours_corrected: boolean;
 }
 
 export interface ConfirmCandidateInput {
   candidate_id: string;
   include: boolean;
   value?: number | null;
+  value_internal?: number | null;
+  value_external?: number | null;
   count_type?: string | null;
   internal_external?: string | null;
   corrected?: boolean;
@@ -147,7 +223,6 @@ export interface ConfirmCandidateInput {
 export interface ConfirmRequestBody {
   project: ConfirmProjectInput;
   axes: ConfirmAxesInput;
-  confirmations: { C1: boolean; C2: boolean; C3: boolean; C4: boolean };
   candidates: ConfirmCandidateInput[];
   confirmed_by: string;
 }

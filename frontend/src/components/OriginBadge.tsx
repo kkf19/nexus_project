@@ -1,20 +1,21 @@
-// Chaque case de la fiche de confirmation porte son origine (dev-brief §3.2) :
-// "tu l'as écrit" (extrait, avec citation), "déduit — à confirmer" (IA),
-// "ton compte" (système) ou "manquant".
-export type Origin = "written" | "inferred" | "account" | "missing";
+// Chaque case de la fiche de confirmation porte son origine (impact-science.md
+// §6, A6) : "tu l'as écrit" (extrait, avec citation), "déduit — à confirmer"
+// (proposé par l'IA), "calculé" (bénévoles × durée, D-30) ou "à remplir"
+// (aucune valeur disponible, la responsable doit la saisir).
+export type Origin = "written" | "inferred" | "calculated" | "to_fill";
 
 const STYLES: Record<Origin, string> = {
   written: "bg-info-bg text-info border-info/30",
   inferred: "bg-warning-bg text-warning border-warning/30",
-  account: "bg-border/60 text-muted border-border",
-  missing: "bg-danger-bg text-danger border-danger/30",
+  calculated: "bg-border/60 text-muted border-border",
+  to_fill: "bg-danger-bg text-danger border-danger/30",
 };
 
 const LABELS: Record<Origin, string> = {
   written: "tu l'as écrit",
   inferred: "déduit — à confirmer",
-  account: "ton compte",
-  missing: "manquant",
+  calculated: "calculé",
+  to_fill: "à remplir",
 };
 
 export default function OriginBadge({ origin, className = "" }: { origin: Origin; className?: string }) {
