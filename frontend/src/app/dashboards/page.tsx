@@ -1,15 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { friendlyErrorMessage, getDashboard, getTaxonomy, getTrace } from "@/lib/api";
+import { friendlyErrorMessage, getDashboard, getDashboardOverview, getTrace } from "@/lib/api";
 import { DEMO_ORGANIZATION_ID } from "@/lib/config";
-import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, type DisplayBucket } from "@/lib/classify";
+import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, sumDirectPeople, type DisplayBucket } from "@/lib/classify";
+import { SDG_LABELS } from "@/lib/sdgs";
 import AggregateTable from "@/components/AggregateTable";
 import RefusalList from "@/components/RefusalList";
 import TracePanel from "@/components/TracePanel";
-import type { Aggregate, DashboardResponse, TaxonomyContent, TraceResponse } from "@/lib/types";
+import type {
+  Aggregate,
+  AreaBlock,
+  DashboardOverviewResponse,
+  QualityIssue,
+  SdgBlock,
+  TraceResponse,
+} from "@/lib/types";
 
 type View = "ol" | "national" | "global";
+type Screen = "overview" | "areas" | "sdgs";
 
 const VIEWS: { key: View; label: string }[] = [
   { key: "ol", label: "Mon OL" },
@@ -17,31 +26,41 @@ const VIEWS: { key: View; label: string }[] = [
   { key: "global", label: "Mondiale" },
 ];
 
+const SCREENS: { key: Screen; label: string }[] = [
+  { key: "overview", label: "Vue d'ensemble" },
+  { key: "areas", label: "Par domaine (Area)" },
+  { key: "sdgs", label: "Par ODD" },
+];
+
 const BUCKET_ORDER: DisplayBucket[] = ["resource", "activity", "impact", "reach", "other"];
+
+function metricValue(aggregates: Aggregate[], metricCode: string): Aggregate | undefined {
+  return aggregates.find((a) => a.metric_code === metricCode);
+}
+
+function fmt(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "inconnu";
+  return value.toLocaleString("fr-FR");
+}
 
 export default function DashboardsPage() {
   const [view, setView] = useState<View>("ol");
-  const [taxonomy, setTaxonomy] = useState<TaxonomyContent | null>(null);
+  const [screen, setScreen] = useState<Screen>("overview");
   const [reportingYear, setReportingYear] = useState<string>("");
-  const [areaFilter, setAreaFilter] = useState("");
-  const [programmeFilter, setProgrammeFilter] = useState("");
-  const [sdgFilter, setSdgFilter] = useState("");
 
-  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Chiffres publiés par JCI et conflits connus (dev-brief.md §2.11, vue
+  // mondiale uniquement) : fonctionnalité de Phase 2/3 inchangée, toujours
+  // servie par /dashboards/{view} (Annexe A #10) -- le nouvel endpoint
+  // /overview ne la duplique pas, on la lit donc à côté, sans s'en servir
+  // pour autre chose (pas d'agrégats/refus réutilisés depuis cet appel).
+  const [qualityIssues, setQualityIssues] = useState<QualityIssue[]>([]);
 
   const [openTraceId, setOpenTraceId] = useState<string | null>(null);
   const [trace, setTrace] = useState<TraceResponse | null>(null);
   const [traceLoading, setTraceLoading] = useState(false);
-
-  useEffect(() => {
-    getTaxonomy()
-      .then((t) => setTaxonomy(t.content))
-      .catch(() => {
-        /* les filtres par axe restent vides si la taxonomie ne charge pas ; pas bloquant */
-      });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +69,9 @@ export default function DashboardsPage() {
       setError(null);
       setOpenTraceId(null);
       try {
-        const res = await getDashboard(view, {
+        const res = await getDashboardOverview(view, {
           scope_organization_id: view === "global" ? undefined : DEMO_ORGANIZATION_ID,
-          group_by: view === "ol" ? "subject" : "network",
           reporting_year: reportingYear ? Number(reportingYear) : undefined,
-          area_of_opportunity: areaFilter || undefined,
-          programme: programmeFilter || undefined,
-          sdg: sdgFilter ? Number(sdgFilter) : undefined,
         });
         if (!cancelled) setData(res);
       } catch (err) {
@@ -69,19 +84,32 @@ export default function DashboardsPage() {
     return () => {
       cancelled = true;
     };
-  }, [view, reportingYear, areaFilter, programmeFilter, sdgFilter]);
+  }, [view, reportingYear]);
 
-  const buckets = useMemo(() => {
-    const grouped: Record<DisplayBucket, Aggregate[]> = {
-      resource: [],
-      activity: [],
-      impact: [],
-      reach: [],
-      other: [],
+  useEffect(() => {
+    if (view !== "global") {
+      setQualityIssues([]);
+      return;
+    }
+    let cancelled = false;
+    getDashboard("global", { group_by: "network", reporting_year: reportingYear ? Number(reportingYear) : undefined })
+      .then((res) => {
+        if (!cancelled) setQualityIssues(res.quality_issues || []);
+      })
+      .catch(() => {
+        if (!cancelled) setQualityIssues([]);
+      });
+    return () => {
+      cancelled = true;
     };
-    data?.aggregates.forEach((a) => {
-      const bucket = classifyIaooi(a.iaooi_class?.value, a.metric_code);
-      grouped[bucket].push(a);
+  }, [view, reportingYear]);
+
+  const overviewBuckets = useMemo(() => {
+    const grouped: Record<DisplayBucket, Aggregate[]> = {
+      resource: [], activity: [], impact: [], reach: [], other: [],
+    };
+    data?.overview.aggregates.forEach((a) => {
+      grouped[classifyIaooi(a.iaooi_class?.value, a.metric_code)].push(a);
     });
     return grouped;
   }, [data]);
@@ -108,7 +136,7 @@ export default function DashboardsPage() {
       <div>
         <h1 className="text-xl font-semibold">Tableaux de bord</h1>
         <p className="mt-1 text-sm text-muted">
-          Un seul moteur de calcul, trois vues. Une valeur inconnue s&apos;affiche « inconnu » — aucune
+          Un seul moteur de calcul, trois écrans. Une valeur inconnue s&apos;affiche « inconnu » — aucune
           cible ni jauge de progression.
         </p>
       </div>
@@ -127,7 +155,22 @@ export default function DashboardsPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          {SCREENS.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setScreen(s.key)}
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                screen === s.key
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : "border-border bg-surface text-foreground hover:border-accent/50"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
         <input
           type="number"
           placeholder="Année"
@@ -135,128 +178,295 @@ export default function DashboardsPage() {
           onChange={(e) => setReportingYear(e.target.value)}
           className="w-28 rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
         />
-        {taxonomy && (
-          <>
-            <select
-              value={areaFilter}
-              onChange={(e) => setAreaFilter(e.target.value)}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
-            >
-              <option value="">Tous les domaines</option>
-              {taxonomy.classification_axes.area_of_opportunity.values.map((v) => (
-                <option key={v.code} value={v.code}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={programmeFilter}
-              onChange={(e) => setProgrammeFilter(e.target.value)}
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
-            >
-              <option value="">Tous les programmes</option>
-              {taxonomy.classification_axes.programme.values.map((v) => (
-                <option key={v.code} value={v.code}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-        <input
-          type="number"
-          min={1}
-          max={17}
-          placeholder="ODD n°"
-          value={sdgFilter}
-          onChange={(e) => setSdgFilter(e.target.value)}
-          className="w-24 rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
-        />
       </div>
 
       {loading && <p className="text-sm text-muted">Calcul en cours…</p>}
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {data && !loading && (
-        <>
-          {data.stale && (
-            <p className="rounded-md border border-warning/40 bg-warning-bg px-3 py-2 text-sm text-warning">
-              Le dernier calcul a échoué : cette vue affiche la dernière exécution réussie
-              ({new Date(data.computed_at).toLocaleString("fr-FR")}).
-            </p>
-          )}
+      {data && !loading && screen === "overview" && (
+        <OverviewScreen
+          data={data}
+          buckets={overviewBuckets}
+          openTraceId={openTraceId}
+          trace={trace}
+          traceLoading={traceLoading}
+          onSelect={handleSelect}
+          qualityIssues={view === "global" ? qualityIssues : []}
+        />
+      )}
 
-          {BUCKET_ORDER.filter((b) => buckets[b].length > 0).map((bucket) => (
-            <section key={bucket} className={`rounded-lg border p-4 ${BUCKET_STYLE[bucket]}`}>
-              <h2 className="text-sm font-semibold uppercase tracking-wide">{BUCKET_LABEL[bucket]}</h2>
-              <div className="mt-3">
-                <AggregateTable aggregates={buckets[bucket]} onSelect={handleSelect} />
-              </div>
-              {buckets[bucket].some((a) => a.measurement_id === openTraceId) && (
-                <>
-                  {traceLoading && <p className="mt-2 text-xs text-muted">Chargement de la traçabilité…</p>}
-                  {!traceLoading && trace && <TracePanel trace={trace} />}
-                </>
-              )}
-            </section>
-          ))}
+      {data && !loading && screen === "areas" && <AreasScreen areas={data.areas} />}
 
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-              Refus d&apos;agrégation
-            </h2>
-            <p className="mt-1 text-xs text-muted">
-              Toujours affichés, jamais masqués ni repliés.
-            </p>
+      {data && !loading && screen === "sdgs" && <SdgsScreen sdgs={data.sdgs} />}
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
+    </div>
+  );
+}
+
+function OverviewScreen({
+  data,
+  buckets,
+  openTraceId,
+  trace,
+  traceLoading,
+  onSelect,
+  qualityIssues,
+}: {
+  data: DashboardOverviewResponse;
+  buckets: Record<DisplayBucket, Aggregate[]>;
+  openTraceId: string | null;
+  trace: TraceResponse | null;
+  traceLoading: boolean;
+  onSelect: (a: Aggregate) => void;
+  qualityIssues: QualityIssue[];
+}) {
+  const ov = data.overview;
+  const external = sumDirectPeople(ov.aggregates, "external");
+  const internal = sumDirectPeople(ov.aggregates, "internal");
+  const hours = metricValue(ov.aggregates, "VOLUNTEER_HOURS");
+
+  return (
+    <>
+      {/* Deux lectures jamais mélangées (impact-science.md §7) : "ce que JCI a
+          fait" (Projets, ressources) d'un côté, "ce qui a changé" (Impact,
+          bloc visuellement distinct, D-22) de l'autre. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <StatCard label="Projets" value={fmt(ov.total_projects)} sub="projets uniques" />
+        <StatCard
+          label="Personnes touchées — public externe"
+          value={external.count === 0 ? "inconnu" : fmt(external.value)}
+          sub="jamais l'audience, jamais l'indirect"
+        />
+        <StatCard
+          label="Membres JCI mobilisés / formés"
+          value={internal.count === 0 ? "inconnu" : fmt(internal.value)}
+          sub="jamais additionné au public externe (R7)"
+        />
+        <StatCard label="Heures de bénévolat" value={hours ? fmt(hours.value) : "inconnu"} sub="somme, projets uniques" />
+        <StatCard label="Projets avec résultat mesuré" value={fmt(ov.projects_measured)} />
+        <StatCard
+          label="Projets RISE"
+          value={fmt(ov.rise_projects)}
+          sub={ov.rise_pct_of_ci !== null ? `${ov.rise_pct_of_ci}% des projets Community Impact` : "aucun projet Community Impact"}
+        />
+        <StatCard label="Pays actifs" value={fmt(ov.countries_active)} />
+        <StatCard label="OL actives" value={fmt(ov.ols_active)} />
+      </div>
+
+      <div className="space-y-4">
+        {BUCKET_ORDER.filter((b) => buckets[b].length > 0).map((bucket) => (
+          <section key={bucket} className={`rounded-lg border p-4 ${BUCKET_STYLE[bucket]}`}>
+            <h2 className="text-sm font-semibold uppercase tracking-wide">{BUCKET_LABEL[bucket]}</h2>
             <div className="mt-3">
-              <RefusalList refusals={data.refusals} />
+              <AggregateTable aggregates={buckets[bucket]} onSelect={onSelect} />
+            </div>
+            {buckets[bucket].some((a) => a.measurement_id === openTraceId) && (
+              <>
+                {traceLoading && <p className="mt-2 text-xs text-muted">Chargement de la traçabilité…</p>}
+                {!traceLoading && trace && <TracePanel trace={trace} />}
+              </>
+            )}
+          </section>
+        ))}
+      </div>
+
+      <section className="rounded-lg border border-border bg-surface p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Refus d&apos;agrégation</h2>
+        <p className="mt-1 text-xs text-muted">Toujours affichés, jamais masqués ni repliés.</p>
+        <div className="mt-3">
+          <RefusalList refusals={ov.refusals} />
+        </div>
+      </section>
+
+      {qualityIssues.length > 0 && (
+        <section className="rounded-lg border border-border bg-surface p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            Chiffres publiés par JCI — incohérences connues
+          </h2>
+          <p className="mt-1 text-xs text-muted">
+            Affichés à côté du calcul NEXUS, jamais à sa place. NEXUS n&apos;arbitre pas entre ces valeurs.
+          </p>
+          <div className="mt-3 space-y-3">
+            {qualityIssues.map((issue) => (
+              <div key={issue.issue_id} className="rounded-md border border-border bg-background p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{issue.subject}</span>
+                  <span className="rounded-full bg-warning-bg px-2 py-0.5 text-xs text-warning">
+                    {issue.resolution_status}
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-1 text-xs text-muted">
+                  {issue.values.map((v, i) => (
+                    <li key={i}>
+                      <span className="font-medium text-foreground">
+                        {v.value_qualifier === "at_least" ? "≥ " : ""}
+                        {v.value.toLocaleString("fr-FR")} {v.unit}
+                      </span>{" "}
+                      {v.source?.document ? (
+                        <>
+                          — {v.source.document} ({v.source.section}
+                          {v.source.page ? `, p.${v.source.page}` : ""})
+                          {v.source.quote && <span> — « {v.source.quote} »</span>}
+                        </>
+                      ) : v.formula ? (
+                        <span>— calculé : {v.formula}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+function AreasScreen({ areas }: { areas: AreaBlock[] }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted">
+        Un projet qui touche plusieurs domaines apparaît dans chaque bloc concerné, avec la mention
+        « domaine secondaire » — la somme des blocs ci-dessous n&apos;est jamais un total (voir « Vue
+        d&apos;ensemble » pour le nombre de projets uniques).
+      </p>
+      {areas.map((area) => {
+        const volunteers = metricValue(area.aggregates, "VOLUNTEERS");
+        const hours = metricValue(area.aggregates, "VOLUNTEER_HOURS");
+        const external = sumDirectPeople(area.aggregates, "external");
+        const internal = sumDirectPeople(area.aggregates, "internal");
+        return (
+          <section key={area.code} className="rounded-lg border border-border bg-surface p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold uppercase tracking-wide">{area.label}</h2>
+              <span className="text-sm text-muted">
+                {fmt(area.total_projects)} projets
+                {area.secondary_only_count > 0 && ` (dont ${area.secondary_only_count} en domaine secondaire)`}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Ce qui a été fait</h3>
+                {area.families.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted">Aucune famille d&apos;activité déclarée.</p>
+                ) : (
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {area.families.map((f) => (
+                      <li key={f.code} className="flex justify-between border-b border-border/60 py-0.5">
+                        <span>{f.label}</span>
+                        <span className="font-medium">{f.project_count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="rounded-md border border-border bg-background p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Ressources</h3>
+                <p className="mt-2 text-sm">
+                  Bénévoles {volunteers ? fmt(volunteers.value) : "inconnu"} · Heures {hours ? fmt(hours.value) : "inconnu"}
+                </p>
+              </div>
+
+              {/* Bloc Impact visuellement distinct des ressources et de la portée
+                  (garde-fou D-22) : couleur et bordure différentes, jamais le
+                  même bloc. */}
+              <div className="rounded-md border border-success/50 bg-success-bg p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide">Impact</h3>
+                <p className="mt-2 text-sm">
+                  Membres formés {internal.count === 0 ? "inconnu" : fmt(internal.value)} · Public externe
+                  formé {external.count === 0 ? "inconnu" : fmt(external.value)} · Résultat mesuré{" "}
+                  {fmt(area.projects_measured)}
+                </p>
+              </div>
+            </div>
+
+            {area.code === "CI" && area.rise && (
+              <div className="mt-4 rounded-md border border-border bg-background p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">RISE</h3>
+                <p className="mt-2 text-sm">
+                  Oui : {area.rise.yes} · Non : {area.rise.no}
+                </p>
+                {area.rise.pillars.length > 0 && (
+                  <ul className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {area.rise.pillars.map((p) => (
+                      <li key={p.code} className="rounded-full border border-border bg-surface px-2 py-1">
+                        {p.code} — {p.project_count}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {area.top_sdgs.length > 0 && (
+                  <p className="mt-2 text-xs text-muted">
+                    ODD les plus cités :{" "}
+                    {area.top_sdgs.map((s) => s.goal).join(" · ")}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                Refus d&apos;agrégation — ce bloc
+              </h3>
+              <div className="mt-2">
+                <RefusalList refusals={area.refusals} />
+              </div>
             </div>
           </section>
-
-          {view === "global" && data.quality_issues && data.quality_issues.length > 0 && (
-            <section className="rounded-lg border border-border bg-surface p-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-                Chiffres publiés par JCI — incohérences connues
-              </h2>
-              <p className="mt-1 text-xs text-muted">
-                Affichés à côté du calcul NEXUS, jamais à sa place. NEXUS n&apos;arbitre pas entre ces
-                valeurs.
-              </p>
-              <div className="mt-3 space-y-3">
-                {data.quality_issues.map((issue) => (
-                  <div key={issue.issue_id} className="rounded-md border border-border bg-background p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{issue.subject}</span>
-                      <span className="rounded-full bg-warning-bg px-2 py-0.5 text-xs text-warning">
-                        {issue.resolution_status}
-                      </span>
-                    </div>
-                    <ul className="mt-2 space-y-1 text-xs text-muted">
-                      {issue.values.map((v, i) => (
-                        <li key={i}>
-                          <span className="font-medium text-foreground">
-                            {v.value_qualifier === "at_least" ? "≥ " : ""}
-                            {v.value.toLocaleString("fr-FR")} {v.unit}
-                          </span>{" "}
-                          {v.source?.document ? (
-                            <>
-                              — {v.source.document} ({v.source.section}
-                              {v.source.page ? `, p.${v.source.page}` : ""})
-                              {v.source.quote && <span> — « {v.source.quote} »</span>}
-                            </>
-                          ) : v.formula ? (
-                            <span>— calculé : {v.formula}</span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
+        );
+      })}
     </div>
+  );
+}
+
+function SdgsScreen({ sdgs }: { sdgs: SdgBlock[] }) {
+  if (sdgs.length === 0) {
+    return <p className="text-sm text-muted">Aucun projet classé sur un ODD pour ce filtre.</p>;
+  }
+  return (
+    <section className="rounded-lg border border-border bg-surface p-4">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+            <th className="py-2 pr-3 font-medium">ODD</th>
+            <th className="py-2 pr-3 font-medium">Principal</th>
+            <th className="py-2 pr-3 font-medium">Secondaire</th>
+            <th className="py-2 pr-3 font-medium">Personnes touchées (externe)</th>
+            <th className="py-2 pr-3 font-medium">Résultat mesuré</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sdgs.map((s) => {
+            const external = sumDirectPeople(s.aggregates, "external");
+            return (
+              <tr key={s.goal} className="border-b border-border/60">
+                <td className="py-2 pr-3 font-medium">
+                  ODD {s.goal} — {SDG_LABELS[s.goal]}
+                </td>
+                <td className="py-2 pr-3">{s.primary_count}</td>
+                <td className="py-2 pr-3">{s.secondary_count}</td>
+                <td className="py-2 pr-3">{external.count === 0 ? "inconnu" : fmt(external.value)}</td>
+                <td className="py-2 pr-3">{s.projects_measured}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="mt-3 text-xs text-muted">
+        Principal et secondaire ne sont jamais additionnés en un seul chiffre (D-27).
+      </p>
+    </section>
   );
 }

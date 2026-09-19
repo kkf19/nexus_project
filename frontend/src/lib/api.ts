@@ -4,6 +4,7 @@ import type {
   CheckPairResult,
   ConfirmRequestBody,
   ConfirmResult,
+  DashboardOverviewResponse,
   DashboardResponse,
   SubmissionDetail,
   SubmissionDraft,
@@ -111,6 +112,21 @@ export function getDashboard(
   });
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return request<DashboardResponse>(`/dashboards/${view}${suffix}`);
+}
+
+// A7 -- GET /dashboards/{view}/overview : donnees pretes pour les 3 ecrans
+// du tableau de bord (impact-science.md §7). Complementaire a getDashboard
+// ci-dessus, pas un remplacement.
+export function getDashboardOverview(
+  view: "ol" | "national" | "global",
+  params: { scope_organization_id?: string; reporting_year?: number } = {}
+): Promise<DashboardOverviewResponse> {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== ("" as unknown)) qs.set(k, String(v));
+  });
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<DashboardOverviewResponse>(`/dashboards/${view}/overview${suffix}`);
 }
 
 export function getTrace(measurementId: string): Promise<TraceResponse> {

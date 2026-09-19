@@ -331,6 +331,74 @@ export interface QualityIssue {
   resolution_status: string;
 }
 
+// A7 -- GET /dashboards/{view}/overview (impact-science.md §7, D-29).
+// Complémentaire à DashboardResponse ci-dessus : les nombres de ressources/
+// impact/portée restent des Aggregate[] (mêmes objets, reclassables avec
+// classify.ts comme aujourd'hui) ; ce qui s'y ajoute est un pur comptage de
+// projets distincts, que le moteur ne produit pas lui-même.
+export interface DashboardOverview {
+  total_projects: number;
+  projects_measured: number;
+  rise_projects: number;
+  rise_pct_of_ci: number | null;
+  countries_active: number;
+  ols_active: number;
+  aggregates: Aggregate[];
+  refusals: Refusal[];
+}
+
+export interface AreaFamilyCount {
+  code: string;
+  label: string;
+  project_count: number;
+}
+
+export interface AreaRiseBreakdown {
+  yes: number;
+  no: number;
+  pillars: { code: string; project_count: number }[];
+}
+
+export interface AreaTopSdg {
+  goal: number;
+  project_count: number;
+}
+
+// Écran 2 (impact-science.md §7) : un bloc par Area. `total_projects` d'un
+// bloc n'est jamais comparable ni sommable avec les autres blocs (D-29) --
+// le total unique de projets vient de DashboardOverview.total_projects.
+export interface AreaBlock {
+  code: string;
+  label: string;
+  total_projects: number;
+  secondary_only_count: number;
+  projects_measured: number;
+  families: AreaFamilyCount[];
+  rise: AreaRiseBreakdown | null;
+  top_sdgs: AreaTopSdg[];
+  aggregates: Aggregate[];
+  refusals: Refusal[];
+}
+
+// Écran 3 : un bloc par ODD, seuls les ODD avec au moins un projet.
+export interface SdgBlock {
+  goal: number;
+  primary_count: number;
+  secondary_count: number;
+  projects_measured: number;
+  aggregates: Aggregate[];
+}
+
+export interface DashboardOverviewResponse {
+  view: string;
+  scope_organization_id: string | null;
+  filters: Record<string, unknown>;
+  computed_at: string;
+  overview: DashboardOverview;
+  areas: AreaBlock[];
+  sdgs: SdgBlock[];
+}
+
 export interface TraceResponse {
   measurement_id: string;
   chain_complete: boolean;

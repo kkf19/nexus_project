@@ -39,3 +39,29 @@ export const BUCKET_STYLE: Record<DisplayBucket, string> = {
   reach: "border-border bg-background",
   other: "border-border bg-surface",
 };
+
+// A7 -- écran 1 (impact-science.md §7) : "Personnes touchées — public
+// externe" et "Membres JCI mobilisés/formés" sont chacun UNE somme de
+// mesures directes (jamais l'audience, jamais l'indirect), jamais mélangées
+// entre interne et externe (R7). Restreint à l'unité "person" : ne somme
+// jamais des heures ou une autre unité avec un décompte de personnes.
+import type { Aggregate } from "./types";
+
+export function sumDirectPeople(
+  aggregates: Aggregate[],
+  internalExternal: "internal" | "external"
+): { value: number; hasUnknown: boolean; count: number } {
+  const rows = aggregates.filter(
+    (a) =>
+      a.metric_code !== "COMM_AUDIENCE" &&
+      a.unit?.code === "person" &&
+      a.population?.count_type === "direct" &&
+      a.population?.internal_external === internalExternal
+  );
+  const known = rows.filter((a) => a.value !== null && a.value !== undefined);
+  return {
+    value: known.reduce((sum, a) => sum + (a.value as number), 0),
+    hasUnknown: known.length < rows.length,
+    count: rows.length,
+  };
+}
