@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ExtractionCandidate, Submission, TaxonomyRelease
-from app.schemas import SubmissionCreate, SubmissionDetail, SubmissionOut
-from app.services import ai_pipeline
+from app.schemas import ConfirmRequest, ConfirmResult, SubmissionCreate, SubmissionDetail, SubmissionOut
+from app.services import ai_pipeline, confirm_service
 
 logger = logging.getLogger("nexus.submissions")
 router = APIRouter(prefix="/submissions", tags=["submissions"])
@@ -162,3 +162,29 @@ def retry_submission(submission_id: str, db: Session = Depends(get_db)):
     _run_pipeline(submission, db)
     db.refresh(submission)
     return submission
+
+
+@router.post("/{submission_id}/confirm", response_model=ConfirmResult)
+def confirm_submission(submission_id: str, payload: ConfirmRequest, db: Session = Depends(get_db)):
+    """Annexe A #5. Ecrit project + measurements en une seule transaction
+    (dev-brief section 3.2). Si un seul MO echoue la validation, RIEN n'est
+    ecrit (422 avec le detail des erreurs)."""
+    submission = db.get(Submission, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="submission introuvable")
+    if submission.pipeline_status != "awaiting_confirmation":
+        raise HTTPException(
+            status_code=409,
+            detail=f"submission non prete pour confirmation (statut actuel : {submission.pipeline_status})",
+        )
+    try:
+        project_id, measurement_ids = confirm_service.confirm_submission(db, submission, payload)
+    except confirm_service.ConfirmError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail={"errors": exc.errors}) from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Echec inattendu de confirmation (submission_id=%s)", submission_id)
+        raise HTTPException(status_code=500, detail="Impossible de confirmer la fiche pour le moment.") from exc
+    db.commit()
+    return {"project_id": project_id, "measurement_ids": measurement_ids}

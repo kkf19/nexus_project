@@ -54,3 +54,57 @@ class MeasurementOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Annexe A #5 — POST /submissions/{id}/confirm (dev-brief.md section 3.2)
+# ---------------------------------------------------------------------------
+class ConfirmSdg(BaseModel):
+    goal: int
+    role: str  # primary|secondary|unknown
+
+
+class ConfirmAxes(BaseModel):
+    area_of_opportunity: list[str] = []   # >=1 requis (R2)
+    programme: list[str] = []             # 0..n, "aucun programme" = liste vide (R9)
+    rise_pillars: list[str] = []          # >=1 requis si "RISE" dans programme (R4)
+    sdgs: list[ConfirmSdg] = []           # >=1, exactement 1 "primary" (R5)
+
+
+class ConfirmProject(BaseModel):
+    name: str | None = None
+    reporting_year: int
+    period_start: str | None = None
+    period_end: str | None = None
+    outcome_status: str  # measured|pending_follow_up|none (D-20)
+    expected_outcome: str | None = None   # requis si pending_follow_up
+    follow_up_date: str | None = None     # requis si pending_follow_up (date ISO)
+
+
+class ConfirmCandidateInput(BaseModel):
+    candidate_id: str
+    include: bool = True          # false = l'utilisateur retire ce chiffre
+    value: float | None = None    # correction de valeur (sinon celle de l'IA)
+    count_type: str | None = None       # reponse C1 (beneficiaires uniquement)
+    internal_external: str | None = None  # reponse C2 (beneficiaires uniquement)
+    corrected: bool = False       # trace derivation "human_validation"
+
+
+class ConfirmConfirmations(BaseModel):
+    C1: bool = False
+    C2: bool = False
+    C3: bool = False
+    C4: bool = False
+
+
+class ConfirmRequest(BaseModel):
+    project: ConfirmProject
+    axes: ConfirmAxes
+    confirmations: ConfirmConfirmations
+    candidates: list[ConfirmCandidateInput] = []
+    confirmed_by: str = "DEMO-USER"
+
+
+class ConfirmResult(BaseModel):
+    project_id: str
+    measurement_ids: list[str]
