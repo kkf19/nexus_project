@@ -412,7 +412,15 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
     for sdg in payload.axes.sdgs:
         db.add(models.ProjectSdg(project_id=project_id, goal=sdg.goal, role=sdg.role,
                                   confirmed_by=payload.confirmed_by, confirmed_at=now))
+    db.flush()  # le projet et ses axes existent avant toute mesure qui les reference
 
+    # Ecriture en deux passes : toutes les mesures d'abord, puis leurs tables
+    # filles (derivation, measurement_relation). Un flush() intermediaire
+    # garantit que les FK sont satisfaites cote Postgres -- l'ordre de tri
+    # topologique implicite de SQLAlchemy s'est avere insuffisant ici avec
+    # plusieurs mesures + leurs enfants ajoutees de facon entrelacee (constate
+    # en production : ForeignKeyViolation sur derivation.measurement_id).
+    measurement_rows: dict[str, models.Measurement] = {}
     for cid, mo in mo_by_candidate.items():
         row = _mo_to_measurement_row(
             mo,
@@ -422,6 +430,11 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
             taxonomy_version=taxonomy_release.version,
         )
         db.add(row)
+        measurement_rows[cid] = row
+    db.flush()
+
+    for cid, mo in mo_by_candidate.items():
+        row = measurement_rows[cid]
         for pos, step in enumerate(mo["derivation"]):
             db.add(models.Derivation(
                 measurement_id=row.measurement_id, position=pos,
