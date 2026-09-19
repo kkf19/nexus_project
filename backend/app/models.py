@@ -115,7 +115,13 @@ class ExtractionCandidate(Base):
 
 
 # ---------------------------------------------------------------------------
-# §2.7 — project et ses 4 tables de classification (3 axes indépendants, D-07)
+# §2.7 — project et ses tables de classification.
+# D-07 (3 axes independants) est amende par D-23/D-24/D-25 (2026-09-19) :
+#   - activity_family (nouvel axe, 1ere dimension, voir taxonomy.config.json) n'a PAS
+#     de table dediee ici -- voir ProjectActivityFamily plus bas.
+#   - ProjectProgramme est DEPRECATED (programme = activite, pas un axe).
+#   - RISE (ProjectRisePillar) est desormais DEPENDANT de Community Impact,
+#     pilote par Project.rise_status (yes/no/not_applicable).
 # ---------------------------------------------------------------------------
 class Project(Base):
     __tablename__ = "project"
@@ -132,6 +138,9 @@ class Project(Base):
     expected_outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
     follow_up_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    rise_status: Mapped[str | None] = mapped_column(Text, nullable=True)  # yes|no|not_applicable (D-24) -- yes seulement si CI dans les Areas
+    activity_duration_hours: Mapped[float | None] = mapped_column(Numeric, nullable=True)  # heures (D-30), sert au calcul de VOLUNTEER_HOURS
+
     programme_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     taxonomy_version: Mapped[str] = mapped_column(Text, ForeignKey("taxonomy_release.version"), nullable=False)
     confirmed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -146,6 +155,7 @@ class ProjectAreaOfOpportunity(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[str] = mapped_column(Text, ForeignKey("project.project_id"), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)  # BE|ID|IC|CI
+    role: Mapped[str | None] = mapped_column(Text, nullable=True)  # primary|secondary (D-26) -- exactement 1 primary par projet, verifie en code
     layer: Mapped[str] = mapped_column(Text, nullable=False, default="SEMANTIC_INTERPRETATION")
     rule_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -155,7 +165,10 @@ class ProjectAreaOfOpportunity(Base):
 
 
 class ProjectProgramme(Base):
-    """Axe B. Cardinalité 0..n (R9) — "aucun programme" est une valeur légitime."""
+    """DEPRECATED (D-23, 2026-09-19) : le programme n'est plus un axe de classification.
+    Table conservee pour compatibilite historique, mais plus alimentee par le pipeline IA
+    ni par la confirmation a partir de v0.3.0 -- voir classification_axes.activity_family
+    (jci_programme_examples) dans taxonomy.config.json. Cardinalite 0..n (R9)."""
     __tablename__ = "project_programme"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -180,6 +193,21 @@ class ProjectRisePillar(Base):
     rule_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[str | None] = mapped_column(Text, nullable=True)
     proposed_by: Mapped[str | None] = mapped_column(Text, nullable=True, default="llm_classifier@v0")
+    confirmed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ProjectActivityFamily(Base):
+    """Nouvel axe (D-25, 2026-09-19) -- 1ere dimension de classification : QUOI a ete
+    fait (former, debattre, planter, jumeler...). Cardinalite 1..n par projet.
+    Codes dans classification_axes.activity_family de taxonomy.config.json.
+    other_label est obligatoire quand code se termine par _OTHER ou vaut OTHER."""
+    __tablename__ = "project_activity_family"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[str] = mapped_column(Text, ForeignKey("project.project_id"), nullable=False)
+    code: Mapped[str] = mapped_column(Text, nullable=False)
+    other_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     confirmed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

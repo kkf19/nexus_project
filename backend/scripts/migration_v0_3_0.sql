@@ -1,328 +1,65 @@
--- NEXUS -- schema genere depuis backend/app/models.py (dev-brief.md section 2)
--- Ne pas editer a la main : regenerer avec backend/scripts/export_schema_sql.py
+-- NEXUS -- migration v0.3.0 (impact-science.md, decisions D-23 a D-31)
+-- Fichier genere a partir de docs/technical/taxonomy.config.json (v0.3.0) : ne
+-- pas editer a la main. A coller tel quel dans l'editeur SQL de Supabase
+-- (Dashboard > SQL Editor > New query > Run).
+--
+-- ADDITIF UNIQUEMENT : aucune colonne, aucune table, aucune ligne supprimee.
+-- IDEMPOTENT : peut etre relance sans effet destructeur (utile si vous devez
+-- re-executer apres une correction de derniere minute sur taxonomy.config.json).
 
-CREATE TABLE geo_mapping (
-	country_iso2 TEXT NOT NULL, 
-	mapping_version TEXT NOT NULL, 
-	geographic_area TEXT NOT NULL, 
-	confidence TEXT NOT NULL, 
-	note TEXT, 
-	PRIMARY KEY (country_iso2, mapping_version)
+BEGIN;
+
+-- 1) project_area_of_opportunity.role (D-26) : primary | secondary
+ALTER TABLE project_area_of_opportunity ADD COLUMN IF NOT EXISTS role TEXT;
+
+-- 2) project_activity_family (D-25) : 1ere dimension de classification
+CREATE TABLE IF NOT EXISTS project_activity_family (
+    id SERIAL NOT NULL,
+    project_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    other_label TEXT,
+    confirmed_by TEXT,
+    confirmed_at TIMESTAMP WITH TIME ZONE,
+    PRIMARY KEY (id),
+    FOREIGN KEY(project_id) REFERENCES project (project_id)
 );
 
-CREATE TABLE measurement_parent (
-	id SERIAL NOT NULL, 
-	measurement_id TEXT NOT NULL, 
-	parent_measurement_id TEXT NOT NULL, 
-	position INTEGER NOT NULL, 
-	PRIMARY KEY (id)
-);
+-- 3) project.rise_status (D-24) et project.activity_duration_hours (D-30)
+ALTER TABLE project ADD COLUMN IF NOT EXISTS rise_status TEXT;
+ALTER TABLE project ADD COLUMN IF NOT EXISTS activity_duration_hours NUMERIC;
 
-CREATE TABLE organization (
-	organization_id TEXT NOT NULL, 
-	org_type TEXT NOT NULL, 
-	name TEXT NOT NULL, 
-	parent_organization_id TEXT, 
-	country_iso2 TEXT, 
-	PRIMARY KEY (organization_id), 
-	FOREIGN KEY(parent_organization_id) REFERENCES organization (organization_id)
-);
+-- 4) Backfill role : la premiere Area (plus petit id) de chaque projet
+--    devient 'primary', les eventuelles suivantes 'secondary'. Deterministe :
+--    redonne le meme resultat a chaque execution.
+WITH ranked AS (
+    SELECT id, project_id,
+           ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY id) AS rn
+    FROM project_area_of_opportunity
+)
+UPDATE project_area_of_opportunity p
+SET role = CASE WHEN r.rn = 1 THEN 'primary' ELSE 'secondary' END
+FROM ranked r
+WHERE p.id = r.id;
 
-CREATE TABLE quality_issue (
-	issue_id TEXT NOT NULL, 
-	kind TEXT NOT NULL, 
-	subject TEXT, 
-	values JSON NOT NULL, 
-	resolution_status TEXT NOT NULL, 
-	displayed BOOLEAN NOT NULL, 
-	PRIMARY KEY (issue_id)
-);
+-- 5) Backfill rise_status : 'yes' si RISE figurait dans project_programme
+--    (ancien axe programme), sinon 'not_applicable'. Deterministe.
+--    Remarque : ne verifie pas retroactivement que CI figure parmi les Areas
+--    du projet (regle R12 appliquee aux NOUVELLES confirmations a partir de
+--    v0.3.0) -- une incoherence historique eventuelle sera signalee, jamais
+--    corrigee silencieusement, lors des tests d'acceptation.
+UPDATE project
+SET rise_status = CASE
+    WHEN EXISTS (
+        SELECT 1 FROM project_programme pp
+        WHERE pp.project_id = project.project_id AND pp.code = 'RISE'
+    ) THEN 'yes'
+    ELSE 'not_applicable'
+END;
 
-CREATE TABLE taxonomy_release (
-	version TEXT NOT NULL, 
-	content JSON NOT NULL, 
-	checksum TEXT NOT NULL, 
-	loaded_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	is_active BOOLEAN NOT NULL, 
-	PRIMARY KEY (version)
-);
+-- 6) Active la taxonomie v0.3.0 (contenu de taxonomy.config.json, tel quel),
+--    desactive toutes les autres versions.
+UPDATE taxonomy_release SET is_active = false WHERE version <> '0.3.0';
 
-CREATE TABLE app_user (
-	user_id TEXT NOT NULL, 
-	organization_id TEXT, 
-	role TEXT NOT NULL, 
-	PRIMARY KEY (user_id), 
-	FOREIGN KEY(organization_id) REFERENCES organization (organization_id)
-);
-
-CREATE TABLE submission (
-	submission_id TEXT NOT NULL, 
-	organization_id TEXT NOT NULL, 
-	user_id TEXT NOT NULL, 
-	raw_text TEXT NOT NULL, 
-	raw_text_sha256 TEXT NOT NULL, 
-	language TEXT, 
-	submitted_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	pipeline_status TEXT NOT NULL, 
-	pipeline_error TEXT, 
-	PRIMARY KEY (submission_id), 
-	FOREIGN KEY(organization_id) REFERENCES organization (organization_id), 
-	FOREIGN KEY(user_id) REFERENCES app_user (user_id)
-);
-
-CREATE TABLE extraction_candidate (
-	candidate_id TEXT NOT NULL, 
-	submission_id TEXT NOT NULL, 
-	stage TEXT NOT NULL, 
-	payload JSON NOT NULL, 
-	model_id TEXT NOT NULL, 
-	validation_errors JSON, 
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	PRIMARY KEY (candidate_id), 
-	FOREIGN KEY(submission_id) REFERENCES submission (submission_id)
-);
-
-CREATE TABLE project (
-	project_id TEXT NOT NULL, 
-	submission_id TEXT NOT NULL, 
-	organization_id TEXT NOT NULL, 
-	name TEXT, 
-	reporting_year INTEGER NOT NULL, 
-	period_start TEXT, 
-	period_end TEXT, 
-	outcome_status TEXT NOT NULL, 
-	expected_outcome TEXT, 
-	follow_up_date DATE, 
-	rise_status TEXT, 
-	activity_duration_hours NUMERIC, 
-	programme_confirmed BOOLEAN NOT NULL, 
-	taxonomy_version TEXT NOT NULL, 
-	confirmed_by TEXT, 
-	confirmed_at TIMESTAMP WITH TIME ZONE, 
-	PRIMARY KEY (project_id), 
-	FOREIGN KEY(submission_id) REFERENCES submission (submission_id), 
-	FOREIGN KEY(organization_id) REFERENCES organization (organization_id), 
-	FOREIGN KEY(taxonomy_version) REFERENCES taxonomy_release (version)
-);
-
-CREATE TABLE measurement (
-	measurement_id TEXT NOT NULL, 
-	standard TEXT NOT NULL, 
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	submission_id TEXT, 
-	project_id TEXT, 
-	organization_id TEXT, 
-	taxonomy_version TEXT, 
-	metric_code TEXT NOT NULL, 
-	metric_label_source TEXT NOT NULL, 
-	definition_status TEXT, 
-	definition_text TEXT, 
-	definition_layer TEXT, 
-	definition_source_ref TEXT, 
-	iaooi_value TEXT, 
-	iaooi_layer TEXT, 
-	iaooi_standard TEXT, 
-	iaooi_rule_id TEXT, 
-	iaooi_confidence TEXT, 
-	source_wording_class TEXT, 
-	taxonomy_refs JSON, 
-	value NUMERIC, 
-	value_status TEXT, 
-	value_qualifier TEXT, 
-	value_range JSON, 
-	unit_code TEXT, 
-	unit_dimension TEXT, 
-	unit_currency_code TEXT, 
-	unit_sub_code TEXT, 
-	unit_normalization JSON, 
-	formula TEXT, 
-	inputs JSON, 
-	method TEXT, 
-	assumptions TEXT, 
-	conflicting_values JSON, 
-	subject_type TEXT, 
-	subject_id TEXT, 
-	subject_name TEXT, 
-	pop_internal_external TEXT, 
-	pop_count_type TEXT, 
-	pop_dedup_basis TEXT, 
-	pop_target_group JSON, 
-	pop_base_population JSON, 
-	pop_attributes JSON, 
-	period_type TEXT, 
-	period_start TEXT, 
-	period_end TEXT, 
-	period_reporting_year INTEGER, 
-	geography JSON, 
-	layer TEXT NOT NULL, 
-	source_origin TEXT, 
-	source_document_id TEXT, 
-	source_page TEXT, 
-	source_section TEXT, 
-	source_quote TEXT, 
-	source_submitted_at TEXT, 
-	source_language TEXT, 
-	source_span JSON, 
-	confidence TEXT, 
-	verification_status TEXT NOT NULL, 
-	evidence_refs JSON, 
-	checks_passed JSON, 
-	checks_failed JSON, 
-	dq_refs JSON, 
-	flag JSON, 
-	validated_by TEXT, 
-	validated_at TIMESTAMP WITH TIME ZONE, 
-	agg_equivalence_key TEXT, 
-	agg_aggregable TEXT, 
-	agg_refusal_reason TEXT, 
-	agg_dedup_key TEXT, 
-	agg_suspected_duplicate_of JSON, 
-	agg_coverage JSON, 
-	PRIMARY KEY (measurement_id), 
-	FOREIGN KEY(submission_id) REFERENCES submission (submission_id), 
-	FOREIGN KEY(project_id) REFERENCES project (project_id), 
-	FOREIGN KEY(organization_id) REFERENCES organization (organization_id), 
-	FOREIGN KEY(taxonomy_version) REFERENCES taxonomy_release (version)
-);
-
-CREATE INDEX ix_measurement_equivalence_key ON measurement (agg_equivalence_key);
-CREATE INDEX ix_measurement_org_year ON measurement (organization_id, period_reporting_year);
-CREATE INDEX ix_measurement_metric_code ON measurement (metric_code);
-CREATE INDEX ix_measurement_project_id ON measurement (project_id);
-CREATE INDEX ix_measurement_verification_status ON measurement (verification_status);
-
-CREATE TABLE project_activity_family (
-	id SERIAL NOT NULL, 
-	project_id TEXT NOT NULL, 
-	code TEXT NOT NULL, 
-	other_label TEXT, 
-	confirmed_by TEXT, 
-	confirmed_at TIMESTAMP WITH TIME ZONE, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(project_id) REFERENCES project (project_id)
-);
-
-CREATE TABLE project_area_of_opportunity (
-	id SERIAL NOT NULL, 
-	project_id TEXT NOT NULL, 
-	code TEXT NOT NULL, 
-	role TEXT, 
-	layer TEXT NOT NULL, 
-	rule_id TEXT, 
-	confidence TEXT, 
-	proposed_by TEXT, 
-	confirmed_by TEXT, 
-	confirmed_at TIMESTAMP WITH TIME ZONE, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(project_id) REFERENCES project (project_id)
-);
-
-CREATE TABLE project_programme (
-	id SERIAL NOT NULL, 
-	project_id TEXT NOT NULL, 
-	code TEXT NOT NULL, 
-	layer TEXT NOT NULL, 
-	rule_id TEXT, 
-	confidence TEXT, 
-	proposed_by TEXT, 
-	confirmed_by TEXT, 
-	confirmed_at TIMESTAMP WITH TIME ZONE, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(project_id) REFERENCES project (project_id)
-);
-
-CREATE TABLE project_rise_pillar (
-	id SERIAL NOT NULL, 
-	project_id TEXT NOT NULL, 
-	code TEXT NOT NULL, 
-	layer TEXT NOT NULL, 
-	rule_id TEXT, 
-	confidence TEXT, 
-	proposed_by TEXT, 
-	confirmed_by TEXT, 
-	confirmed_at TIMESTAMP WITH TIME ZONE, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(project_id) REFERENCES project (project_id)
-);
-
-CREATE TABLE project_sdg (
-	id SERIAL NOT NULL, 
-	project_id TEXT NOT NULL, 
-	goal INTEGER NOT NULL, 
-	role TEXT NOT NULL, 
-	layer TEXT NOT NULL, 
-	rule_id TEXT, 
-	confidence TEXT, 
-	proposed_by TEXT, 
-	confirmed_by TEXT, 
-	confirmed_at TIMESTAMP WITH TIME ZONE, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(project_id) REFERENCES project (project_id)
-);
-
-CREATE TABLE aggregate (
-	aggregate_run_id TEXT NOT NULL, 
-	measurement_id TEXT NOT NULL, 
-	view TEXT NOT NULL, 
-	scope_organization_id TEXT, 
-	group_by TEXT NOT NULL, 
-	group_label TEXT, 
-	filters JSON, 
-	engine_version TEXT, 
-	computed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	PRIMARY KEY (aggregate_run_id), 
-	FOREIGN KEY(measurement_id) REFERENCES measurement (measurement_id)
-);
-
-CREATE TABLE derivation (
-	id SERIAL NOT NULL, 
-	measurement_id TEXT NOT NULL, 
-	position INTEGER NOT NULL, 
-	step TEXT NOT NULL, 
-	rule_id TEXT, 
-	agent TEXT, 
-	input_refs JSON, 
-	confidence TEXT, 
-	timestamp TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(measurement_id) REFERENCES measurement (measurement_id)
-);
-
-CREATE TABLE measurement_relation (
-	id SERIAL NOT NULL, 
-	measurement_id TEXT NOT NULL, 
-	relation_type TEXT NOT NULL, 
-	target_measurement_id TEXT NOT NULL, 
-	note TEXT, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(measurement_id) REFERENCES measurement (measurement_id)
-);
-
-CREATE TABLE measurement_version (
-	id SERIAL NOT NULL, 
-	measurement_id TEXT NOT NULL, 
-	version_no INTEGER NOT NULL, 
-	snapshot JSON NOT NULL, 
-	changed_by TEXT, 
-	changed_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	PRIMARY KEY (id), 
-	FOREIGN KEY(measurement_id) REFERENCES measurement (measurement_id)
-);
-
-CREATE TABLE refusal (
-	refusal_id TEXT NOT NULL, 
-	aggregate_run_id TEXT, 
-	reason TEXT NOT NULL, 
-	measurement_ids JSON NOT NULL, 
-	detail TEXT, 
-	explanation_fr TEXT, 
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	PRIMARY KEY (refusal_id), 
-	FOREIGN KEY(aggregate_run_id) REFERENCES aggregate (aggregate_run_id)
-);
-
--- Charge le referentiel de taxonomie actif (dev-brief.md section 2.1), tel quel
 INSERT INTO taxonomy_release (version, content, checksum, is_active)
 VALUES ('0.3.0', $taxonomy_json${
   "meta": {
@@ -1669,147 +1406,12 @@ VALUES ('0.3.0', $taxonomy_json${
   }
 }
 $taxonomy_json$::json, '59285e7dcb953ea2e2433d12090a71784f394b0597e55669ccf64227819d5dfd', true)
-ON CONFLICT (version) DO NOTHING;
+ON CONFLICT (version) DO UPDATE
+SET is_active = true, content = EXCLUDED.content, checksum = EXCLUDED.checksum;
 
--- Charge le registre de qualite des donnees JCI (dev-brief.md section 2.11), tel quel
+COMMIT;
 
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-01', 'conflict', $qi_subject$Nombre de membres$qi_subject$, $qi_values$[{"label": "A", "value": 100000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "a global network of over 100,000 young leaders in more than 100 countries"}}, {"label": "B", "value": 100000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "vi", "section": "Message from JCI President", "quote": "More than 100,000 young leaders across four Areas came together"}}, {"label": "C", "value": 147000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "2", "section": "Organization Overview", "quote": "with over 147,000 members and 4,600 Local Organizations worldwide"}}, {"label": "D", "value": 147670, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "8", "section": "Membership Details", "quote": "powered by 147,670 members"}}]$qi_values$::json, 'UNRESOLVED', true)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-02', 'conflict', $qi_subject$Nombre de pays$qi_subject$, $qi_values$[{"label": "A", "value": 100, "value_qualifier": "at_least", "unit": "country", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "in more than 100 countries"}}, {"label": "B", "value": 100, "value_qualifier": "at_least", "unit": "country", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "24", "section": "Four Areas of Opportunity and SDG Alignment", "quote": "present in over 100 countries"}}, {"label": "C", "value": 114, "value_qualifier": "at_least", "unit": "country", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "2", "section": "Organization Overview", "quote": "Today, JCI is present in more than 114 countries"}}, {"label": "D", "value": 114, "value_qualifier": "exact", "unit": "country", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "9", "section": "International Presence \u2013 Operational Areas", "quote": "Global Presence (114 Countries)"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-03', 'conflict', $qi_subject$Nombre de projets$qi_subject$, $qi_values$[{"label": "A", "value": 1000, "value_qualifier": "at_least", "unit": "project", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "1,000+ projects implemented (2024\u20132025)"}}, {"label": "B", "value": 1000, "value_qualifier": "at_least", "unit": "project", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "84", "section": "Community Development Projects", "quote": "1,000+ Total Projects Executed (2024-25)"}}, {"label": "C", "value": 1000, "value_qualifier": "at_least", "unit": "project", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "85", "section": "JCI RISE Projects", "quote": "1000+ Total Projects Reported for 2025"}}, {"label": "D", "value": 10000, "value_qualifier": "at_least", "unit": "project", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "vii", "section": "Message from Interim Secretary General", "quote": "the collective energy of over 10,000 projects across more than 4,500 Local Organizations"}}]$qi_values$::json, 'UNRESOLVED', true)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-04', 'conflict', $qi_subject$Nombre de Local Organizations$qi_subject$, $qi_values$[{"label": "A", "value": 4500, "value_qualifier": "at_least", "unit": "local_organization", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "4,500+ Local Organizations mobilized across continents"}}, {"label": "B", "value": 4600, "value_qualifier": "approx", "unit": "local_organization", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "2", "section": "Organization Overview", "quote": "4,600 Local Organizations worldwide"}}, {"label": "C", "value": 4641, "value_qualifier": "exact", "unit": "local_organization", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "8", "section": "Membership Details", "quote": "4,641 Local Organizations provide the grassroots foundation"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-05', 'conflict', $qi_subject$Nombre de bénévoles$qi_subject$, $qi_values$[{"label": "A", "value": 40000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "40,000+ volunteers engaged"}}, {"label": "B", "value": 40000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "84", "section": "Community Development Projects", "quote": "40,000+ Total Number of Volunteers Engaged"}}, {"label": "C", "value": 42401, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "86", "section": "JCI RISE Projects", "quote": "42,401 Total Number of Volunteers Engaged"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-06', 'conflict', $qi_subject$Participation aux événements internationaux$qi_subject$, $qi_values$[{"label": "A", "value": 10000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "10,000+ attendees participating in international events"}}, {"label": "B", "value": 10000, "value_qualifier": "at_most", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "59", "section": "JCI Events Area Conferences and World Congress", "quote": "In 2024\u201325, JCI gathered nearly 10,000 participants across its global and Area events"}}, {"label": "C", "value": 10729, "value_qualifier": "exact", "unit": "registration", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "59", "section": "JCI Events Area Conferences and World Congress", "quote": "Total Registrations Across All Conferences 10,729 Registrations"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-07', 'conflict', $qi_subject$Followers réseaux sociaux$qi_subject$, $qi_values$[{"label": "A", "value": 260000, "value_qualifier": "at_least", "unit": "follower", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "260,000+ followers across JCI's digital platforms"}}, {"label": "B", "value": 229200, "value_qualifier": "exact", "unit": "follower_or_subscriber", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "148000 + 41000 + 32000 + 8200", "inputs": [{"label": "Facebook", "value": 148000, "value_qualifier": "exact", "unit": "follower", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "17", "section": "Social Media Metrics", "quote": "Total Followers: 148,000"}}, {"label": "Instagram", "value": 41000, "value_qualifier": "exact", "unit": "follower", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "17", "section": "Social Media Metrics", "quote": "Total Followers: 41,000"}}, {"label": "LinkedIn", "value": 32000, "value_qualifier": "exact", "unit": "follower", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "17", "section": "Social Media Metrics", "quote": "Total Followers: 32,000"}}, {"label": "YouTube", "value": 8200, "value_qualifier": "exact", "unit": "subscriber", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "18", "section": "Social Media Metrics", "quote": "Subscribers: 8,200"}}], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-08', 'conflict', $qi_subject$Impressions vs reach$qi_subject$, $qi_values$[{"label": "A", "value": 2000000, "value_qualifier": "at_least", "unit": "impression", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "2 million+ impressions"}}, {"label": "B", "value": 2000000, "value_qualifier": "at_least", "unit": "reach", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "17", "section": "Social Media Metrics", "quote": "Reach: Over 2 million (76% organic)"}}, {"label": "C", "value": 318604, "value_qualifier": "exact", "unit": "impression", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "17", "section": "Social Media Metrics", "quote": "Impressions: 318,604"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-09', 'conflict', $qi_subject$Lecteurs du LEADER Magazine$qi_subject$, $qi_values$[{"label": "A", "value": 13800, "value_qualifier": "approx", "unit": "reader", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "The Leader Magazine: 13,800 readers across 70+ countries"}}, {"label": "B", "value": 13000, "value_qualifier": "at_most", "unit": "reader", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "19", "section": "The LEADER Magazine", "quote": "The Leader has reached nearly 13,000 total readers across seven issues"}}, {"label": "C", "value": 13872, "value_qualifier": "exact", "unit": "reader", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "20", "section": "The LEADER Magazine", "quote": "Total 13,872 15,423 0:48:56"}}, {"label": "D", "value": 12564, "value_qualifier": "exact", "unit": "reader_device", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "8857 + 81 + 3626", "inputs": [{"label": "Mobile", "value": 8857, "value_qualifier": "exact", "unit": "reader", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "19", "section": "The LEADER Magazine", "quote": "Mobile Phone 8,857 (70.50%)"}}, {"label": "Tablet", "value": 81, "value_qualifier": "exact", "unit": "reader", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "19", "section": "The LEADER Magazine", "quote": "Tablet 81 (0.64%)"}}, {"label": "Computer", "value": 3626, "value_qualifier": "exact", "unit": "reader", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "19", "section": "The LEADER Magazine", "quote": "Computer or Laptop 3,626 (28.86%)"}}], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-10', 'conflict', $qi_subject$Genre des Senators$qi_subject$, $qi_values$[{"label": "A", "value": 0.67, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "100", "section": "JCI Senate", "quote": "67% Senators are male"}}, {"label": "B", "value": 0.37, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "100", "section": "JCI Senate", "quote": "and 37% are female as of 2025"}}, {"label": "C", "value": 1.04, "value_qualifier": "exact", "unit": "ratio", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "0.67 + 0.37", "inputs": ["ref:same_conflict.values"], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-11', 'conflict', $qi_subject$Participants JCI Ankara '7x7'$qi_subject$, $qi_values$[{"label": "A", "value": 49, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "75", "section": "International Human Duties Impact Stories", "quote": "where 49 participants discussed the 7 duties at thematic roundtables"}}, {"label": "B", "value": 45, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "75", "section": "International Human Duties Impact Stories", "quote": "We engaged 45 participants"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-12', 'conflict', $qi_subject$Bridges Project : participants vs formés$qi_subject$, $qi_values$[{"label": "A", "value": 35, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "91", "section": "JCI RISE Impact Stories", "quote": "Over three weeks, 35 participants engaged in intensive sessions led by 20 volunteer trainers"}}, {"label": "B", "value": 200, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "91", "section": "JCI RISE Impact Stories", "quote": "200+ youth trained"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-13', 'conflict', $qi_subject$Impulso NOA : 4 nouveaux membres = 20 %$qi_subject$, $qi_values$[{"label": "A", "value": 22, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "94", "section": "JCI RISE Impact Stories", "quote": "directly connecting 22 advanced students with leading companies"}}, {"label": "B", "value": 0.2, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "94", "section": "JCI RISE Impact Stories", "quote": "four new JCI Salta members\u2014representing 20% of all participants"}}, {"label": "C", "value": 0.1818, "value_qualifier": "exact", "unit": "ratio", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "4 / 22", "inputs": ["ref:same_conflict.values"], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', true)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-14', 'conflict', $qi_subject$Global Youth Dialogue : présents vs membres/non-membres$qi_subject$, $qi_values$[{"label": "A", "value": 662, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "122", "section": "Global Youth Dialogue 2025", "quote": "662 live attendees"}}, {"label": "B", "value": 679, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "123", "section": "Global Youth Dialogue 2025", "quote": "JCI Members 679 (79.6%)"}}, {"label": "C", "value": 174, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "123", "section": "Global Youth Dialogue 2025", "quote": "Non-Members 174 (20.4%)"}}, {"label": "D", "value": 853, "value_qualifier": "exact", "unit": "person", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "679 + 174", "inputs": ["ref:same_conflict.values"], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-15', 'conflict', $qi_subject$ECOSOC side event : présents > inscrits$qi_subject$, $qi_values$[{"label": "A", "value": 1160, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "117", "section": "Impact Through Hosted and Partner Events", "quote": "1,160+ registrants"}}, {"label": "B", "value": 1500, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "117", "section": "Impact Through Hosted and Partner Events", "quote": "1,500+ live participants"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-16', 'conflict', $qi_subject$ODD du programme JCI RISE$qi_subject$, $qi_values$[{"label": "A", "value": [1, 3, 8, 9, 11, 12, 16, 17], "value_qualifier": "exact", "unit": "sdg_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "26", "section": "Programs and Initiatives with SDG Alignment", "quote": "JCI RISE \u2022 SDG 1: Addresses community challenges to reduce poverty through local initiatives."}}, {"label": "B", "value": [3, 8, 10], "value_qualifier": "exact", "unit": "sdg_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "85", "section": "JCI RISE Projects", "quote": "The initiative positions JCI as a key contributor to SDG 3 (Good Health & Well-being), SDG 8 (Decent Work & Economic Growth), and SDG 10 (Reduced Inequalities)."}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-17', 'conflict', $qi_subject$Libellés des piliers RISE$qi_subject$, $qi_values$[{"label": "A", "value": ["Sustain and Rebuild Economies", "Workforce Empowerment", "Mental Health Awareness"], "value_qualifier": "exact", "unit": "label_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "85", "section": "JCI RISE Projects", "quote": "Sustain and Rebuild Economies: Support businesses, entrepreneurs, and SMEs."}}, {"label": "B", "value": ["Sustaining and Rebuilding Economies", "Workforce Motivation", "Preserving Mental Health"], "value_qualifier": "exact", "unit": "label_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "85", "section": "JCI RISE Projects", "quote": "RISE Pillars Covered"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-18', 'conflict', $qi_subject$Pourcentages dont la somme vaut 100,01 %$qi_subject$, $qi_values$[{"label": "A", "value": [0.403, 0.2804, 0.3167], "value_qualifier": "exact", "unit": "ratio_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "85", "section": "JCI RISE Projects", "quote": "Sustaining and Rebuilding Economies 40.30% \u2026 Preserving Mental Health 28.04% \u2026 Workforce Motivation 31.67%"}}, {"label": "B", "value": [0.6704, 0.0915, 0.2191, 0.0191], "value_qualifier": "exact", "unit": "ratio_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "86", "section": "JCI RISE Projects", "quote": "2025 Projects Reported per Area"}}, {"label": "C", "value": 1.0001, "value_qualifier": "exact", "unit": "ratio", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "sum(A) and sum(B)", "inputs": ["ref:same_conflict.values"], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-19', 'conflict', $qi_subject$Part des LO en Europe$qi_subject$, $qi_values$[{"label": "A", "value": 0.158, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "8", "section": "Membership Details", "quote": "Europe 17,623 11.9% 736 15.8%"}}, {"label": "B", "value": 0.159, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "11", "section": "Local Organizations", "quote": "Europe 736 (15.9%)"}}, {"label": "C", "value": 0.1586, "value_qualifier": "exact", "unit": "ratio", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "736 / 4641", "inputs": ["ref:same_conflict.values"], "rule_id": "CALC-ARITH"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-20', 'conflict', $qi_subject$Nom officiel de TOYP$qi_subject$, $qi_values$[{"label": "A", "value": "Ten Outstanding Young Persons of the World", "value_qualifier": "exact", "unit": "label", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "54", "section": "Ten Outstanding Young Persons of the World (TOYP)", "quote": "Ten Outstanding Young Persons of the World (TOYP)"}}, {"label": "B", "value": "Ten Outstanding Young Persons", "value_qualifier": "exact", "unit": "label", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "26", "section": "Programs and Initiatives with SDG Alignment", "quote": "Ten Outstanding Young Persons (TOYP)"}}, {"label": "C", "value": "Ten Outstanding Persons of the Year", "value_qualifier": "exact", "unit": "label", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "113", "section": "Corporate Sponsors Driving Shared Impact", "quote": "the Ten Outstanding Persons of the Year programs"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-21', 'conflict', $qi_subject$Chiffres d'événements externes à proximité des chiffres JCI$qi_subject$, $qi_values$[{"label": "A", "value": 52000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "119", "section": "Impact Through Hosted and Partner Events", "quote": "which drew over 52,000 participants from 130+ countries"}}, {"label": "B", "value": 1000, "value_qualifier": "at_least", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "121", "section": "Impact Through Hosted and Partner Events", "quote": "which convened over 1,000 leaders from 100 countries"}}, {"label": "C", "value": 45, "value_qualifier": "exact", "unit": "person", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "121", "section": "Impact Through Hosted and Partner Events", "quote": "brought together 45 young human rights advocates from around the world"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-22', 'conflict', $qi_subject$ODD 11 cité deux fois (SDGs Hunt)$qi_subject$, $qi_values$[{"label": "A", "value": 11, "value_qualifier": "exact", "unit": "sdg", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "89", "section": "Community Impact Stories", "quote": "SDG 11: Sustainable Cities & Communities; SDG 1: No Poverty"}}, {"label": "B", "value": 11, "value_qualifier": "exact", "unit": "sdg", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "89", "section": "Community Impact Stories", "quote": "SDG 16: Peace,Justice & Strong Institutions,SDG 11: Sustainable Cities & Communities"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-23', 'conflict', $qi_subject$Pétitions IHD : pays par geographic_area$qi_subject$, $qi_values$[{"label": "A", "value": [35, 45, 63, 48], "value_qualifier": "exact", "unit": "country_list", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "73", "section": "International Human Duties Initiative", "quote": "Asia and the Pacific 54,921 (81.85%) from 35 Countries \u2026 America 3,656 (5.45%) from 45 Countries \u2026 Africa and the Middle East 6,867 (10.23%) from 63 Countries \u2026 Europe 1,657 (2.47%) from 48 Countries"}}, {"label": "B", "value": 191, "value_qualifier": "exact", "unit": "country", "layer": "SEMANTIC_INTERPRETATION", "value_status": "calculated", "formula": "35 + 45 + 63 + 48", "inputs": ["ref:same_conflict.values"], "rule_id": "CALC-ARITH"}, {"label": "C", "value": 22, "value_qualifier": "exact", "unit": "national_organization", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "10", "section": "National Organizations", "quote": "America 22 (19.3%)"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-24', 'conflict', $qi_subject$Hétérogénéité des périodes de reporting$qi_subject$, $qi_values$[{"label": "A", "value": "2024\u20132025", "value_qualifier": "exact", "unit": "period", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "v", "section": "Executive Summary", "quote": "1,000+ projects implemented (2024\u20132025)"}}, {"label": "B", "value": "2025", "value_qualifier": "exact", "unit": "period", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "85", "section": "JCI RISE Projects", "quote": "Total Projects Reported for 2025"}}, {"label": "C", "value": "January\u2013October 2025", "value_qualifier": "exact", "unit": "period", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "17", "section": "Social Media Metrics", "quote": "From January to October 2025"}}, {"label": "D", "value": "October 2024\u2013August 2025", "value_qualifier": "exact", "unit": "period", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "96", "section": "JCI Foundation", "quote": "Total Contributions Received (USD) since October 2024 to August 2025"}}, {"label": "E", "value": "since 2022", "value_qualifier": "exact", "unit": "period", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "96", "section": "JCI Foundation", "quote": "Total Contributions Received (USD) since 2022"}}, {"label": "F", "value": "since October 6, 2025", "value_qualifier": "exact", "unit": "period", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "21", "section": "The New Face of JCI Online", "quote": "Since the October 6, 2025 launch alone"}}]$qi_values$::json, 'UNRESOLVED', true)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-25', 'conflict', $qi_subject$Part des membres d'America (graphique)$qi_subject$, $qi_values$[{"label": "A", "value": 0.08, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "8", "section": "Membership Details", "quote": "America 11,775 8.0% 492 10.6%"}}, {"label": "B", "value": 0.8, "value_qualifier": "exact", "unit": "ratio", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "8", "section": "Membership Details", "quote": "America 11,775 (80%)"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('DQC-26', 'conflict', $qi_subject$Utilisateurs actifs de jci.cc$qi_subject$, $qi_values$[{"label": "A", "value": 8700, "value_qualifier": "at_least", "unit": "user", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "21", "section": "The New Face of JCI Online", "quote": "the website attracted more than 8,700 active users since its redesign launch from over 50 countries"}}, {"label": "B", "value": 13351, "value_qualifier": "exact", "unit": "user", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "statement_published", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "22", "section": "The New Face of JCI Online", "quote": "13,351 Total Active Users"}}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-01', 'visual', $qi_subject$Global Presence (114 Countries)$qi_subject$, $qi_values$[{"page": "9", "section": "International Presence \u2013 Operational Areas", "chart": {"value": "Global Presence (114 Countries)", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "9", "section": "International Presence \u2013 Operational Areas", "quote": "Global Presence (114 Countries)"}}, "missing": "Liste des pays / National Organizations repr\u00e9sent\u00e9s sur la carte", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-02', 'visual', $qi_subject$Participation in Conferences$qi_subject$, $qi_values$[{"page": "42", "section": "Trainings at Area Conferences and World Congress", "chart": {"value": "Participation in Conferences", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "42", "section": "Trainings at Area Conferences and World Congress", "quote": "Participation in Conferences"}}, "missing": "R\u00e9partition des 1,969 participants par conf\u00e9rence (libell\u00e9s pr\u00e9sents, valeurs absentes)", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-03', 'visual', $qi_subject$National Organization Attendances per Area Conference (2025)$qi_subject$, $qi_values$[{"page": "60", "section": "JCI Events Area Conferences and World Congress", "chart": {"value": "National Organization Attendances per Area Conference (2025)", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "60", "section": "JCI Events Area Conferences and World Congress", "quote": "National Organization Attendances per Area Conference (2025)"}}, "missing": "Toutes les valeurs", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-04', 'visual', $qi_subject$Primary SDGs Addressed / Secondary SDG$qi_subject$, $qi_values$[{"page": "84", "section": "Community Development Projects", "chart": {"value": "Primary SDGs Addressed / Secondary SDG", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "84", "section": "Community Development Projects", "quote": "Primary SDGs Addressed / Secondary SDG"}}, "missing": "Toutes les valeurs (distribution des ODD principaux et secondaires)", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-05', 'visual', $qi_subject$Amount of Grants (USD) Received per Year$qi_subject$, $qi_values$[{"page": "97", "section": "JCI Foundation Development Grants", "chart": {"value": "Amount of Grants (USD) Received per Year", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "97", "section": "JCI Foundation Development Grants", "quote": "Amount of Grants (USD) Received per Year"}}, "missing": "Association valeur \u2194 ann\u00e9e \u2194 geographic_area", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-06', 'visual', $qi_subject$Amount of Grants (USD) Received per Year / Number of Projects per Year per Area$qi_subject$, $qi_values$[{"page": "98", "section": "JCI Foundation", "chart": {"value": "Amount of Grants (USD) Received per Year / Number of Projects per Year per Area", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "98", "section": "JCI Foundation", "quote": "Amount of Grants (USD) Received per Year / Number of Projects per Year per Area"}}, "missing": "Association valeur \u2194 ann\u00e9e \u2194 geographic_area", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-07', 'visual', $qi_subject$RISE to the Challenge Attendees per Area$qi_subject$, $qi_values$[{"page": "118", "section": "Impact Through Hosted and Partner Events", "chart": {"value": "RISE to the Challenge Attendees per Area", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "118", "section": "Impact Through Hosted and Partner Events", "quote": "RISE to the Challenge Attendees per Area"}}, "missing": "Toutes les valeurs par geographic_area", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-08', 'visual', $qi_subject$Languages per Area$qi_subject$, $qi_values$[{"page": "118", "section": "Impact Through Hosted and Partner Events", "chart": {"value": "Languages per Area", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "118", "section": "Impact Through Hosted and Partner Events", "quote": "Languages per Area"}}, "missing": "Toutes les valeurs (libell\u00e9s Spanish, French, Japanese, English pr\u00e9sents)", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
-INSERT INTO quality_issue (issue_id, kind, subject, "values", resolution_status, displayed)
-VALUES ('VDX-09', 'visual', $qi_subject$Gobal Youth Dialogue Attendees per Area$qi_subject$, $qi_values$[{"page": "123", "section": "Global Youth Dialogue 2025", "chart": {"value": "Gobal Youth Dialogue Attendees per Area", "layer": "OFFICIAL_JCI_FACT", "value_status": "extracted", "fact_scope": "chart_exists", "source": {"origin": "jci_report_2025", "document": "JCI Impact Report 2025", "page": "123", "section": "Global Youth Dialogue 2025", "quote": "Gobal Youth Dialogue Attendees per Area"}}, "missing": "Toutes les valeurs par geographic_area", "value": null, "value_status": "visual_data_not_extracted"}]$qi_values$::json, 'UNRESOLVED', false)
-ON CONFLICT (issue_id) DO NOTHING;
-
+-- Verification suggeree apres execution (a lancer separement, hors transaction) :
+--   SELECT version, is_active FROM taxonomy_release ORDER BY loaded_at DESC;
+--   SELECT project_id, role, code FROM project_area_of_opportunity ORDER BY project_id, id;
+--   SELECT project_id, rise_status FROM project;
