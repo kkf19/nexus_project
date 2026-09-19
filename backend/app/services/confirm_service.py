@@ -367,8 +367,12 @@ def confirm_submission(db: Session, submission: models.Submission, payload) -> t
         )
         ok, detail = validators_service.is_valid(mo)
         if not ok:
-            for code, path, msg in detail["schema_errors"]:
-                validation_errors.append({"candidate_id": cid, "message": f"{code} {path}: {msg}"})
+            # validate_measurement_object() renvoie des paires (code, message) ;
+            # validate_provenance() renvoie des triplets (code, path, message).
+            # Les deux formes sont normalisees ici (cf. docs/technical/
+            # validate_measurement_objects.py:validate_one et Tier 2/validate_provenance.py).
+            for code, msg in detail["schema_errors"]:
+                validation_errors.append({"candidate_id": cid, "message": f"{code}: {msg}"})
             for code, path, msg in detail["provenance_blocking"]:
                 validation_errors.append({"candidate_id": cid, "message": f"{code} {path}: {msg}"})
         else:
