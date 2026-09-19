@@ -185,6 +185,12 @@ def confirm_submission(submission_id: str, payload: ConfirmRequest, db: Session 
     except Exception as exc:
         db.rollback()
         logger.exception("Echec inattendu de confirmation (submission_id=%s)", submission_id)
-        raise HTTPException(status_code=500, detail="Impossible de confirmer la fiche pour le moment.") from exc
+        # Diagnostic temporaire (deploiement) : detail expose le temps de
+        # stabiliser ce tout nouvel endpoint en production.
+        import traceback
+        raise HTTPException(status_code=500, detail={
+            "message": str(exc),
+            "traceback": traceback.format_exc(),
+        }) from exc
     db.commit()
     return {"project_id": project_id, "measurement_ids": measurement_ids}
