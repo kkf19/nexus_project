@@ -114,6 +114,21 @@ dans la foulée : le second ratio (`rise_pct_of_all`) a été ajouté au backend
 vérifié en direct sur le site (ex. mesuré : 30 % des projets CI, 21,4 % de tous les projets),
 commité et poussé.
 
+## Remarque sur AC-29 — une heure corrigée n'est jamais sommée
+
+Constaté en relisant le tableau de bord en direct après le test AC-29 : une mesure
+`VOLUNTEER_HOURS` corrigée manuellement par le SG obtient `value_status = "estimated"`. Le moteur
+d'agrégation figé n'agrège que les statuts `extracted` et `calculated`
+(`VALUE_STATUS_AGGREGABLE = {"extracted", "calculated"}`, ligne 51 d'`aggregation_engine.py`) —
+`estimated` en est délibérément exclu, quelle que soit la valeur. Conséquence directe, observée en
+conditions réelles sur le site : la mesure corrigée à 50h apparaît en refus `UNKNOWN_VALUE` sur le
+tableau de bord (visible, non masqué — conforme à la règle "un refus n'est pas une panne") plutôt
+que d'être incluse dans le total "Heures de bénévolat". Ce n'est pas un bug — c'est le moteur figé
+qui, par construction, ne fait jamais confiance à une valeur "estimée" pour un total officiel — mais
+c'est une conséquence peu visible qui mérite d'être connue : **toute correction manuelle d'une
+heure de bénévolat sort silencieusement cette mesure des totaux agrégés**, sans qu'aucun message
+à l'écran de confirmation ne le dise au SG au moment où il corrige la valeur.
+
 ## Constat de performance (hors périmètre des 31 AC, mais important pour la démo)
 
 Avec 14 projets de démonstration en base, l'écran "Vue d'ensemble" (`/dashboards/{view}/overview`)
