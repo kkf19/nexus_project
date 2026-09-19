@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import TaxonomyRelease
+
+logger = logging.getLogger("nexus.taxonomy")
 
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
 
@@ -19,13 +23,8 @@ def get_active_taxonomy(db: Session = Depends(get_db)):
             select(TaxonomyRelease).where(TaxonomyRelease.is_active.is_(True))
         ).scalar_one_or_none()
     except Exception as exc:
-        # Diagnostic temporaire (deploiement) : le detail exact est expose le
-        # temps d'identifier une regression de schema apres la Phase 3.
-        import traceback
-        raise HTTPException(status_code=500, detail={
-            "message": str(exc),
-            "traceback": traceback.format_exc(),
-        }) from exc
+        logger.exception("Echec de lecture de la taxonomie active")
+        raise HTTPException(status_code=500, detail="Impossible de charger la taxonomie pour le moment.") from exc
     if not release:
         raise HTTPException(status_code=404, detail="aucune taxonomie active — lancer scripts/init_db.py")
     return {"version": release.version, "content": release.content}
