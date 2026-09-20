@@ -6,19 +6,17 @@ import { DEMO_ORGANIZATIONS } from "@/lib/config";
 import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, sumDirectPeople, type DisplayBucket } from "@/lib/classify";
 import { SDG_LABELS } from "@/lib/sdgs";
 import AggregateTable from "@/components/AggregateTable";
-import RefusalList from "@/components/RefusalList";
 import TracePanel from "@/components/TracePanel";
 import type {
   Aggregate,
   AreaBlock,
   DashboardOverviewResponse,
-  Refusal,
   SdgBlock,
   TraceResponse,
 } from "@/lib/types";
 
 type View = "ol" | "national" | "global";
-type Screen = "overview" | "areas" | "sdgs" | "refusals";
+type Screen = "overview" | "areas" | "sdgs";
 
 const VIEWS: { key: View; label: string }[] = [
   { key: "ol", label: "Mon OL" },
@@ -26,19 +24,20 @@ const VIEWS: { key: View; label: string }[] = [
   { key: "global", label: "Mondiale" },
 ];
 
+// Decision (2026-09-20, remplace le detour du meme jour vers un onglet dedie
+// -- voir historique git) : cette page est une surface de LECTURE D'IMPACT
+// pour un public externe (President JCI, board national/mondial, eventuel
+// investisseur), jamais un outil de diagnostic interne. Regle : tout ce qui
+// n'aide pas directement a lire l'impact (refus d'agregation, codes bruts,
+// conflits documentaires) est retire de cet affichage. Ces signaux restent
+// calcules par le moteur (backend/engine/aggregation_engine.py, jamais
+// modifie) et exposes par l'API pour l'equipe et les tests -- ils ne sont
+// simplement plus render ici. Voir aussi la suppression du bloc "26
+// conflits" du meme jour, meme logique.
 const SCREENS: { key: Screen; label: string }[] = [
   { key: "overview", label: "Vue d'ensemble" },
   { key: "areas", label: "Par domaine (Area)" },
   { key: "sdgs", label: "Par ODD" },
-  // Ecran dedie (2026-09-20) : les refus d'agregation ont leur propre onglet
-  // plutot que d'etre affiches en permanence sous "Vue d'ensemble" (retour
-  // utilisateur : "n'ont pas leur place sur la page dashboard" -- comprendre
-  // "pas comme mur rouge permanent sur l'ecran principal"). La donnee et la
-  // fonctionnalite ne sont PAS supprimees (regle non negociable, cf.
-  // RefusalList.tsx) : elles restent entierement visibles, juste sur un
-  // onglet qu'on choisit de regarder, avec un badge de compte pour rester
-  // decouvrable.
-  { key: "refusals", label: "Refus d'agrégation" },
 ];
 
 const BUCKET_ORDER: DisplayBucket[] = ["resource", "activity", "impact", "reach", "other"];
@@ -168,27 +167,19 @@ export default function DashboardsPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
-          {SCREENS.map((s) => {
-            const refusalCount = s.key === "refusals" ? data?.overview.refusals.length ?? 0 : 0;
-            return (
-              <button
-                key={s.key}
-                onClick={() => setScreen(s.key)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  screen === s.key
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-border bg-surface text-foreground hover:border-accent/50"
-                }`}
-              >
-                {s.label}
-                {s.key === "refusals" && refusalCount > 0 && (
-                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-semibold text-white">
-                    {refusalCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {SCREENS.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setScreen(s.key)}
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                screen === s.key
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : "border-border bg-surface text-foreground hover:border-accent/50"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
         <input
           type="number"
@@ -216,8 +207,6 @@ export default function DashboardsPage() {
       {data && !loading && screen === "areas" && <AreasScreen areas={data.areas} />}
 
       {data && !loading && screen === "sdgs" && <SdgsScreen sdgs={data.sdgs} />}
-
-      {data && !loading && screen === "refusals" && <RefusalsScreen refusals={data.overview.refusals} />}
     </div>
   );
 }
@@ -314,26 +303,6 @@ function OverviewScreen({
   );
 }
 
-function RefusalsScreen({ refusals }: { refusals: Refusal[] }) {
-  return (
-    <section className="rounded-lg border border-border bg-surface p-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-        Ce que le système refuse d&apos;additionner
-      </h2>
-      <p className="mt-1 text-xs text-muted">
-        NEXUS n&apos;additionne jamais deux valeurs dont la définition, l&apos;unité, la population ou la
-        période ne sont pas démontrées équivalentes — plutôt que de produire une statistique fausse, il
-        dit non et explique pourquoi. Ces refus concernent le filtre actuellement sélectionné ci-dessus ;
-        ils n&apos;ont pas été retirés des totaux ni convertis en zéro, ils n&apos;y sont simplement jamais
-        entrés.
-      </p>
-      <div className="mt-3">
-        <RefusalList refusals={refusals} />
-      </div>
-    </section>
-  );
-}
-
 function AreasScreen({ areas }: { areas: AreaBlock[] }) {
   return (
     <div className="space-y-4">
@@ -417,15 +386,6 @@ function AreasScreen({ areas }: { areas: AreaBlock[] }) {
                 )}
               </div>
             )}
-
-            <div className="mt-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
-                Refus d&apos;agrégation — ce bloc
-              </h3>
-              <div className="mt-2">
-                <RefusalList refusals={area.refusals} />
-              </div>
-            </div>
           </section>
         );
       })}
