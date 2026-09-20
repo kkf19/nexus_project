@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { friendlyErrorMessage, getProject, getTaxonomy, getTrace } from "@/lib/api";
 import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, type DisplayBucket } from "@/lib/classify";
-import { metricLabel, risePillarLabel } from "@/lib/metricLabels";
+import { metricLabel, risePillarLabel, unitLabel } from "@/lib/metricLabels";
 import { SDG_LABELS } from "@/lib/sdgs";
 import TracePanel from "@/components/TracePanel";
 import type { MeasurementObject, ProjectDetail, TaxonomyContent, TraceResponse } from "@/lib/types";
@@ -122,8 +122,14 @@ export default function ProjectDetailPage() {
         </p>
       </div>
 
+      {/* Retour KKF (2026-09-20) : on n'est plus sur l'écran de confirmation --
+          le projet a déjà été compris par NEXUS ET validé par l'humain. À ce
+          stade on lit des faits établis sur le projet, pas une proposition
+          encore soumise à vérification. D'où le renommage "Ce que NEXUS a
+          compris" -> "Attributs du projet" (rien n'est changé dans les
+          données : mêmes axes, même statut de résultat). */}
       <section className="rounded-lg border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Ce que NEXUS a compris</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Attributs du projet</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {project.axes.area_of_opportunity.map((code) => (
             <span key={code} className="rounded-full border border-border bg-background px-3 py-1 text-xs">
@@ -161,34 +167,47 @@ export default function ProjectDetailPage() {
           <section key={bucket} className={`rounded-lg border p-4 ${BUCKET_STYLE[bucket]}`}>
             <h2 className="text-sm font-semibold uppercase tracking-wide">{BUCKET_LABEL[bucket]}</h2>
             <div className="mt-3 space-y-2">
-              {items.map((m) => (
-                <div key={m.measurement_id} className="rounded-md border border-border/60 bg-surface p-2 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span title={`Code interne : ${m.metric_code}`}>
-                      {metricLabel(m.metric_code)} :{" "}
-                      <span className="font-medium">
-                        {m.value === null || m.value === undefined
-                          ? "inconnu"
-                          : `${m.value_qualifier === "approx" ? "≈ " : ""}${m.value.toLocaleString("fr-FR")}`}
-                      </span>{" "}
-                      {m.unit?.code}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectMeasurement(m.measurement_id)}
-                      className="whitespace-nowrap text-xs font-medium text-accent underline underline-offset-2 hover:no-underline"
-                    >
-                      {openTraceId === m.measurement_id ? "Masquer la source" : "Voir la source"}
-                    </button>
+              {items.map((m) => {
+                // Retour KKF (2026-09-20) : plusieurs mesures du même metric_code
+                // (ex. 3 lignes "Participants") sont normales dans le
+                // Measurement Object -- chacune porte 1 sujet/population/période
+                // distincts (measurement-object.md §0, "déclaration de grain").
+                // Sans indice, rien ne les distingue à l'écran. On affiche donc
+                // `definition.text` (jamais inventée -- absente si non fournie
+                // par la source, cf. §2.2) pour lever l'ambiguïté, et l'unité
+                // passe par unitLabel() plutôt que le code brut ("person" ->
+                // "personne(s)"). Le code interne reste consultable au survol.
+                const hasDefinition = m.definition?.status === "specified" && m.definition.text;
+                return (
+                  <div key={m.measurement_id} className="rounded-md border border-border/60 bg-surface p-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span title={`Code interne : ${m.metric_code}`}>
+                        {metricLabel(m.metric_code)} :{" "}
+                        <span className="font-medium">
+                          {m.value === null || m.value === undefined
+                            ? "inconnu"
+                            : `${m.value_qualifier === "approx" ? "≈ " : ""}${m.value.toLocaleString("fr-FR")}`}
+                        </span>{" "}
+                        <span title={`Code interne : ${m.unit?.code || "—"}`}>{unitLabel(m.unit?.code)}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectMeasurement(m.measurement_id)}
+                        className="whitespace-nowrap text-xs font-medium text-accent underline underline-offset-2 hover:no-underline"
+                      >
+                        {openTraceId === m.measurement_id ? "Masquer la source" : "Voir la source"}
+                      </button>
+                    </div>
+                    {hasDefinition && <p className="mt-1 text-xs text-muted">{m.definition.text}</p>}
+                    {openTraceId === m.measurement_id && (
+                      <>
+                        {traceLoading && <p className="mt-2 text-xs text-muted">Chargement…</p>}
+                        {!traceLoading && trace && <TracePanel trace={trace} />}
+                      </>
+                    )}
                   </div>
-                  {openTraceId === m.measurement_id && (
-                    <>
-                      {traceLoading && <p className="mt-2 text-xs text-muted">Chargement…</p>}
-                      {!traceLoading && trace && <TracePanel trace={trace} />}
-                    </>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         );

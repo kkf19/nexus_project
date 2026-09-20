@@ -4,27 +4,28 @@
 // disponible, la responsable doit la saisir).
 export type Origin = "written" | "inferred" | "calculated" | "to_fill";
 
-// Revue Product Owner (2026-09-20) : "L'utilisateur n'a pas besoin de savoir
-// que NEXUS a fait une opération arithmétique [...] La mécanique reste
-// interne." Règle retenue : un badge n'a sa place que si l'utilisateur doit
+// Revue Product Owner (2026-09-20, P0) : "L'utilisateur n'a pas besoin de
+// savoir que NEXUS a fait une opération arithmétique [...] La mécanique
+// reste interne." Règle : un badge n'a sa place que si l'utilisateur doit
 // prendre une décision à ce sujet.
-// - "written" (ce que la personne a écrit elle-même) : rien à décider, rien
-//   à afficher. Avant : "tu l'as écrit" — supprimé (§3B de la revue).
-// - "calculated" (bénévoles × durée) : un calcul interne, pas une décision.
-//   Avant : "calculé" — supprimé (§3C), la valeur reste éditable telle
-//   quelle si une correction est nécessaire, sans exposer la mécanique.
-// - "inferred" : NEXUS propose une valeur à partir du texte -- l'utilisateur
-//   doit la confirmer ou la corriger, donc ça reste visible. Avant : "déduit
-//   — à confirmer" (jargon de data governance) -> "Suggestion NEXUS" (§3A).
+// - "written" / "calculated" : rien à décider, jamais affiché (inchangé).
 // - "to_fill" : une vraie action est requise (aucune valeur disponible),
-//   reste visible.
-const VISIBLE_ORIGINS: Origin[] = ["inferred", "to_fill"];
+//   reste visible -- seul badge encore affiché.
+//
+// CHALLENGE tranché par KKF (2026-09-20, correction de structure) : "inferred"
+// ("Suggestion NEXUS") retiré de VISIBLE_ORIGINS -- décision P0 ci-dessus
+// SUPERSEDED sur ce point précis, historique gardé plutôt que réécrit.
+// Raison : répété sur presque chaque champ de l'écran de confirmation
+// (nom du projet, type de comptage, pour qui, familles d'activité, ODD,
+// RISE...), le badge n'apportait plus d'information -- tout le monde sait
+// déjà que NEXUS a fait la proposition, la répétition alourdissait l'écran
+// sans aider une décision. La distinction "à confirmer" reste réelle dans la
+// donnée (chaque champ garde son statut d'origine, rien n'est supprimé côté
+// data) ; seule sa mise en avant systématique par un badge disparaît. Si
+// l'écran doit un jour redire "ces champs sont des suggestions", ce sera une
+// seule mention, une fois, pas un badge par champ.
+const VISIBLE_ORIGINS: Origin[] = ["to_fill"];
 
-// Refonte visuelle 2026-09-20 : "Suggestion NEXUS" passe du jaune d'alerte à
-// l'émeraude translucide (une proposition du produit, pas un avertissement)
-// avec une petite étoile de marque ; "à compléter" reste en rouge doux, une
-// vraie action est requise. Présentation uniquement -- mêmes deux origines
-// visibles, même logique (VISIBLE_ORIGINS ci-dessus, décision PO inchangée).
 const STYLES: Record<Origin, string> = {
   written: "",
   inferred: "bg-accent/10 text-accent border-accent/30",
