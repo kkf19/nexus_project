@@ -7,7 +7,7 @@ NEXUS transforme les textes libres décrivant des projets JCI en chiffres normal
 - **Site** (frontend, Vercel) : https://nexusproject-nexus-2251.vercel.app
 - **API** (backend, Render) : https://nexus-project-w4ux.onrender.com
 - Compte utilisé : un compte de démonstration unique (`DEMO-OL` / `DEMO-USER`), pas d'écran de connexion dans ce MVP (décision D-04).
-- L'écran « Vue d'ensemble » du tableau de bord peut prendre 30 à 50 secondes à charger avec le volume actuel de données de démonstration (voir `docs/technical/acceptance-report.md`, section performance) — recommandé de le charger une première fois avant une démo live pour « réveiller » le service Render (offre gratuite).
+- L'écran « Vue d'ensemble » du tableau de bord charge en ~10 secondes (voir `docs/technical/acceptance-report.md`, section performance) ; toujours recommandé de le charger une première fois avant une démo live pour « réveiller » le service Render (offre gratuite). Lors d'un changement de vue ou d'année, l'écran précédent reste affiché avec une légère transition animée pendant le rechargement, plutôt qu'un texte de chargement.
 
 ## État d'avancement
 
