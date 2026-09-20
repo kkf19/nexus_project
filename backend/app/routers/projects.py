@@ -7,15 +7,38 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     Measurement,
+    Organization,
     Project,
     ProjectAreaOfOpportunity,
     ProjectProgramme,
     ProjectRisePillar,
     ProjectSdg,
 )
-from app.services import mo_builder
+from app.services import aggregation_service, mo_builder
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@router.get("")
+def get_projects_list(
+    view: str,
+    scope_organization_id: str | None = None,
+    area_of_opportunity: str | None = None,
+    sdg: int | None = None,
+    reporting_year: int | None = None,
+    db: Session = Depends(get_db),
+):
+    """Drill-down du tableau de bord (revue Product Owner 2026-09-20) : liste
+    les projets d'un perimetre (vue + organisation + annee), optionnellement
+    restreinte a une Area ou un ODD -- memes filtres que get_area_breakdown /
+    get_sdg_breakdown (aggregation_service.py), aucune nouvelle regle."""
+    try:
+        return aggregation_service.list_projects(
+            db, view=view, scope_organization_id=scope_organization_id,
+            area_of_opportunity=area_of_opportunity, sdg=sdg, reporting_year=reporting_year,
+        )
+    except aggregation_service.AggregationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.get("/{project_id}")
@@ -26,6 +49,8 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="project introuvable")
+
+    organization = db.get(Organization, project.organization_id)
 
     areas = db.execute(
         select(ProjectAreaOfOpportunity).where(ProjectAreaOfOpportunity.project_id == project_id)
@@ -47,6 +72,8 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
         "project_id": project.project_id,
         "name": project.name,
         "organization_id": project.organization_id,
+        "organization_name": organization.name if organization else None,
+        "country_iso2": organization.country_iso2 if organization else None,
         "reporting_year": project.reporting_year,
         "period_start": project.period_start,
         "period_end": project.period_end,

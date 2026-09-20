@@ -423,6 +423,47 @@ export interface TraceEntry {
   note?: string;
 }
 
+// Drill-down "Area / ODD -> projets" (revue Product Owner 2026-09-20) :
+// GET /projects (liste, un item par projet du périmètre) et GET
+// /projects/{id} (détail + mesures, pour l'écran de preuve/traçabilité).
+export interface ProjectListItem {
+  project_id: string;
+  name: string;
+  organization_id: string;
+  organization_name: string;
+  country_iso2: string | null;
+  reporting_year: number;
+  outcome_status: string;
+}
+
+export interface ProjectListResponse {
+  projects: ProjectListItem[];
+}
+
+export interface ProjectDetail {
+  project_id: string;
+  name: string | null;
+  organization_id: string;
+  organization_name: string | null;
+  country_iso2: string | null;
+  reporting_year: number;
+  period_start: string | null;
+  period_end: string | null;
+  outcome_status: string;
+  expected_outcome: string | null;
+  follow_up_date: string | null;
+  taxonomy_version: string;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  axes: {
+    area_of_opportunity: string[];
+    programme: string[];
+    rise_pillars: string[];
+    sdgs: { goal: number; role: string }[];
+  };
+  measurements: MeasurementObject[];
+}
+
 export interface CheckPairResult {
   compatible: boolean;
   refusal?: Refusal;

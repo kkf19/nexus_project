@@ -6,6 +6,8 @@ import type {
   ConfirmResult,
   DashboardOverviewResponse,
   DashboardResponse,
+  ProjectDetail,
+  ProjectListResponse,
   SubmissionDetail,
   SubmissionDraft,
   SubmissionOut,
@@ -156,6 +158,24 @@ export function getMeasurement(id: string) {
   return request(`/measurements/${id}`);
 }
 
-export function getProject(id: string) {
-  return request(`/projects/${id}`);
+export function getProject(id: string): Promise<ProjectDetail> {
+  return request<ProjectDetail>(`/projects/${id}`);
+}
+
+// Drill-down "Area / ODD -> projets" (revue Product Owner 2026-09-20) :
+// mêmes filtres de périmètre que getDashboardOverview, plus un filtre
+// optionnel sur une Area ou un ODD précis.
+export function listProjects(params: {
+  view: "ol" | "national" | "global";
+  scope_organization_id?: string;
+  area_of_opportunity?: string;
+  sdg?: number;
+  reporting_year?: number;
+}): Promise<ProjectListResponse> {
+  const { view, ...rest } = params;
+  const qs = new URLSearchParams({ view });
+  Object.entries(rest).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== ("" as unknown)) qs.set(k, String(v));
+  });
+  return request<ProjectListResponse>(`/projects?${qs.toString()}`);
 }

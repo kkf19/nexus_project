@@ -6,7 +6,9 @@ import { DEMO_ORGANIZATIONS } from "@/lib/config";
 import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, sumDirectPeople, type DisplayBucket } from "@/lib/classify";
 import { SDG_LABELS } from "@/lib/sdgs";
 import AggregateTable from "@/components/AggregateTable";
+import ProjectListDisclosure from "@/components/ProjectListDisclosure";
 import TracePanel from "@/components/TracePanel";
+import { risePillarLabel } from "@/lib/metricLabels";
 import type {
   Aggregate,
   AreaBlock,
@@ -47,23 +49,6 @@ function metricValue(aggregates: Aggregate[], metricCode: string): Aggregate | u
 function fmt(value: number | null | undefined): string {
   if (value === null || value === undefined) return "inconnu";
   return value.toLocaleString("fr-FR");
-}
-
-// Libellés humains des piliers RISE (revue PO 2026-09-20, §19 : "REBUILD_ECONOMIES
-// — 1" ressemble à une ligne SQL). Reproduit tel quel depuis
-// docs/technical/taxonomy.config.json (rise_pillars.values[].label -- sourcé
-// du rapport JCI 2025 p.85, jamais traduit ni reformulé pour ne pas altérer
-// une citation) : les 3 seuls piliers que ce référentiel définit
-// aujourd'hui. Le code brut reste consultable via l'attribut title. Un code
-// non reconnu s'affiche tel quel plutôt que d'inventer un libellé.
-const RISE_PILLAR_LABELS: Record<string, string> = {
-  REBUILD_ECONOMIES: "Sustaining and rebuilding economies",
-  WORKFORCE: "Motivating the workforce",
-  MENTAL_HEALTH: "Preserving mental health and well-being",
-};
-
-function risePillarLabel(code: string): string {
-  return RISE_PILLAR_LABELS[code] || code;
 }
 
 export default function DashboardsPage() {
@@ -215,9 +200,23 @@ export default function DashboardsPage() {
         />
       )}
 
-      {data && !loading && screen === "areas" && <AreasScreen areas={data.areas} />}
+      {data && !loading && screen === "areas" && (
+        <AreasScreen
+          areas={data.areas}
+          view={view}
+          scopeOrganizationId={scopeOrganizationId}
+          reportingYear={reportingYear ? Number(reportingYear) : undefined}
+        />
+      )}
 
-      {data && !loading && screen === "sdgs" && <SdgsScreen sdgs={data.sdgs} />}
+      {data && !loading && screen === "sdgs" && (
+        <SdgsScreen
+          sdgs={data.sdgs}
+          view={view}
+          scopeOrganizationId={scopeOrganizationId}
+          reportingYear={reportingYear ? Number(reportingYear) : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -331,7 +330,17 @@ function OverviewScreen({
   );
 }
 
-function AreasScreen({ areas }: { areas: AreaBlock[] }) {
+function AreasScreen({
+  areas,
+  view,
+  scopeOrganizationId,
+  reportingYear,
+}: {
+  areas: AreaBlock[];
+  view: View;
+  scopeOrganizationId?: string;
+  reportingYear?: number;
+}) {
   return (
     <div className="space-y-4">
       {areas.map((area) => {
@@ -354,6 +363,16 @@ function AreasScreen({ areas }: { areas: AreaBlock[] }) {
                 {fmt(area.total_projects)} projets
               </span>
             </div>
+
+            {area.total_projects > 0 && (
+              <ProjectListDisclosure
+                label={`Voir les ${fmt(area.total_projects)} projets →`}
+                view={view}
+                scopeOrganizationId={scopeOrganizationId}
+                areaOfOpportunity={area.code}
+                reportingYear={reportingYear}
+              />
+            )}
 
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div>
@@ -442,7 +461,17 @@ function AreasScreen({ areas }: { areas: AreaBlock[] }) {
   );
 }
 
-function SdgsScreen({ sdgs }: { sdgs: SdgBlock[] }) {
+function SdgsScreen({
+  sdgs,
+  view,
+  scopeOrganizationId,
+  reportingYear,
+}: {
+  sdgs: SdgBlock[];
+  view: View;
+  scopeOrganizationId?: string;
+  reportingYear?: number;
+}) {
   if (sdgs.length === 0) {
     return <p className="text-sm text-muted">Aucun projet classé sur un ODD pour ce filtre.</p>;
   }
@@ -462,14 +491,23 @@ function SdgsScreen({ sdgs }: { sdgs: SdgBlock[] }) {
           {sdgs.map((s) => {
             const external = sumDirectPeople(s.aggregates, "external");
             return (
-              <tr key={s.goal} className="border-b border-border/60">
+              <tr key={s.goal} className="border-b border-border/60 align-top">
                 <td className="py-2 pr-3 font-medium">
                   ODD {s.goal} — {SDG_LABELS[s.goal]}
                 </td>
                 <td className="py-2 pr-3">{s.primary_count}</td>
                 <td className="py-2 pr-3">{s.secondary_count}</td>
                 <td className="py-2 pr-3">{external.count === 0 ? "inconnu" : fmt(external.value)}</td>
-                <td className="py-2 pr-3">{s.projects_measured}</td>
+                <td className="py-2 pr-3">
+                  {s.projects_measured}
+                  <ProjectListDisclosure
+                    label="Voir les projets →"
+                    view={view}
+                    scopeOrganizationId={scopeOrganizationId}
+                    sdg={s.goal}
+                    reportingYear={reportingYear}
+                  />
+                </td>
               </tr>
             );
           })}

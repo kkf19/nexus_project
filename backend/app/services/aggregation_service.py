@@ -723,6 +723,72 @@ def get_dashboard_overview(db: Session, *, view: str, scope_organization_id: str
 
 
 # ---------------------------------------------------------------------------
+# GET /projects — support du drill-down "Area / ODD -> projets" (revue
+# Product Owner 2026-09-20 : "le Board doit pouvoir descendre de la Area
+# jusqu'au projet, puis jusqu'a la source"). Ne recalcule et ne redefinit
+# AUCUNE regle d'eligibilite : reutilise _project_scope_ids (memes filtres
+# vue/organisation/annee que get_projects_overview) puis restreint, le cas
+# echeant, aux memes project_id qu'un bloc Area/ODD deja affiche par
+# get_area_breakdown / get_sdg_breakdown. Renvoie des identites de projet,
+# jamais un total ou une mesure -- le moteur n'est pas implique ici.
+# ---------------------------------------------------------------------------
+def list_projects(db: Session, *, view: str, scope_organization_id: str | None,
+                   area_of_opportunity: str | None = None, sdg: int | None = None,
+                   reporting_year: int | None = None) -> dict:
+    if view not in VIEWS:
+        raise AggregationError(f"vue inconnue : {view!r} (attendu : {', '.join(VIEWS)})")
+    if view != "global" and scope_organization_id and not db.get(models.Organization, scope_organization_id):
+        raise AggregationError(f"organisation introuvable : {scope_organization_id}", status_code=404)
+
+    filters = {"reporting_year": reporting_year} if reporting_year is not None else {}
+    project_ids = _project_scope_ids(db, view, scope_organization_id, filters)
+
+    if area_of_opportunity and project_ids:
+        area_ids = set(db.execute(
+            select(models.ProjectAreaOfOpportunity.project_id).where(
+                models.ProjectAreaOfOpportunity.project_id.in_(project_ids),
+                models.ProjectAreaOfOpportunity.code == area_of_opportunity,
+            )
+        ).scalars().all())
+        project_ids &= area_ids
+
+    if sdg is not None and project_ids:
+        sdg_ids = set(db.execute(
+            select(models.ProjectSdg.project_id).where(
+                models.ProjectSdg.project_id.in_(project_ids), models.ProjectSdg.goal == sdg,
+            )
+        ).scalars().all())
+        project_ids &= sdg_ids
+
+    if not project_ids:
+        return {"projects": []}
+
+    rows = db.execute(
+        select(models.Project, models.Organization)
+        .join(models.Organization, models.Organization.organization_id == models.Project.organization_id)
+        .where(models.Project.project_id.in_(project_ids))
+    ).all()
+
+    projects = [
+        {
+            "project_id": p.project_id,
+            # Le nom vient de l'IA puis est corrigeable par l'utilisateur
+            # (Project.name, nullable) -- absence de nom != projet inconnu :
+            # on l'indique comme tel plutot que d'inventer un titre.
+            "name": p.name or "(projet sans titre)",
+            "organization_id": p.organization_id,
+            "organization_name": org.name,
+            "country_iso2": org.country_iso2,
+            "reporting_year": p.reporting_year,
+            "outcome_status": p.outcome_status,
+        }
+        for p, org in rows
+    ]
+    projects.sort(key=lambda x: (x["name"], x["project_id"]))
+    return {"projects": projects}
+
+
+# ---------------------------------------------------------------------------
 # Annexe A #12 — POST /aggregations/check-pair
 # ---------------------------------------------------------------------------
 def check_pair(db: Session, measurement_id_a: str, measurement_id_b: str) -> dict:

@@ -509,7 +509,7 @@ export default function ConfirmPage() {
           Aucun plafond : tout ODD réellement touché peut être coché, à condition d&apos;être justifié.
           Exactement un ODD principal.
         </p>
-        <div className="mt-3 max-h-96 overflow-y-auto pr-1">
+        <div className="mt-3">
           <SdgSelector value={sdgs} onChange={setSdgs} />
         </div>
         {!sdgsOk && (

@@ -63,3 +63,19 @@ export function metricLabel(code: string | null | undefined): string {
   if (!code) return "Non classé";
   return METRIC_LABELS_FR[code] || humanizeFallback(code);
 }
+
+// Libellés humains des piliers RISE (revue Product Owner 2026-09-20, §19 :
+// "REBUILD_ECONOMIES — 1" ressemble à une ligne SQL). Reproduits tels quels
+// depuis docs/technical/taxonomy.config.json (rise_pillars.values[].label,
+// sourcé du rapport JCI 2025 p.85, jamais traduit ni reformulé) : les 3
+// seuls piliers que ce référentiel définit aujourd'hui. Partagé entre le
+// tableau de bord et l'écran projet pour ne pas dupliquer la table.
+export const RISE_PILLAR_LABELS: Record<string, string> = {
+  REBUILD_ECONOMIES: "Sustaining and rebuilding economies",
+  WORKFORCE: "Motivating the workforce",
+  MENTAL_HEALTH: "Preserving mental health and well-being",
+};
+
+export function risePillarLabel(code: string): string {
+  return RISE_PILLAR_LABELS[code] || code;
+}
