@@ -163,8 +163,87 @@ mark {
   pointer-events: none;
 }
 
+/* Halo au focus des champs de saisie principaux (brief p. 4, "zone de texte
+   soignée"). Un seul point de vérité pour ce halo, réutilisable partout où
+   l'on veut le même traitement (textarea d'accueil, futurs champs clés). */
+.nexus-focus-halo:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(46, 230, 166, 0.14), 0 0 24px rgba(46, 230, 166, 0.12);
+}
+
+/* Écran "Analyse en cours…" (brief p. 4) : moment signature de la démo.
+   Un balayage lumineux traverse le texte soumis, de haut en bas, tant que
+   l'analyse tourne -- jamais un pourcentage inventé, juste un signe de vie. */
+.nexus-scan-box {
+  position: relative;
+  overflow: hidden;
+}
+
+.nexus-scan-box::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: linear-gradient(180deg, transparent, rgba(46, 230, 166, 0.16), transparent);
+  animation: nexus-scan 2.6s ease-in-out infinite;
+}
+
+@keyframes nexus-scan {
+  0% {
+    top: -64px;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+/* Barre NEXUS lumineuse : pilule centrale de l'écran d'attente. */
+.nexus-glow-bar {
+  box-shadow: 0 0 0 1px rgba(46, 230, 166, 0.3), 0 0 32px rgba(46, 230, 166, 0.35),
+    0 0 64px rgba(46, 230, 166, 0.15);
+  animation: nexus-glow-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes nexus-glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(46, 230, 166, 0.3), 0 0 32px rgba(46, 230, 166, 0.35),
+      0 0 64px rgba(46, 230, 166, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(46, 230, 166, 0.45), 0 0 40px rgba(46, 230, 166, 0.5),
+      0 0 80px rgba(46, 230, 166, 0.22);
+  }
+}
+
+.nexus-dot-pulse {
+  animation: nexus-dot-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes nexus-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.nexus-step-active {
+  animation: nexus-dot-pulse 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nexus-count-anim {
     transition: none !important;
+  }
+  .nexus-scan-box::after,
+  .nexus-glow-bar,
+  .nexus-dot-pulse,
+  .nexus-step-active {
+    animation: none !important;
   }
 }
