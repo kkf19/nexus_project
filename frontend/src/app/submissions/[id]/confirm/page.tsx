@@ -668,41 +668,63 @@ export default function ConfirmPage() {
             </p>
           </div>
         ) : (
-          <div className="mt-3 space-y-2 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="outcome-choice"
-                checked={outcomeChoice === "pending_follow_up"}
-                onChange={() => setOutcomeChoice("pending_follow_up")}
-              />
-              Pas encore mesurable à ce stade
-            </label>
+          <div className="mt-3 space-y-3 text-sm">
+            <p>
+              NEXUS n&apos;a identifié aucun résultat mesurable dans le texte fourni.{" "}
+              <span className="font-medium">
+                Un effet mesurable est-il attendu pour ce projet, même s&apos;il n&apos;est pas encore visible
+                aujourd&apos;hui ?
+              </span>
+            </p>
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="outcome-choice"
+                  checked={outcomeChoice === "pending_follow_up"}
+                  onChange={() => setOutcomeChoice("pending_follow_up")}
+                />
+                Oui
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="outcome-choice"
+                  checked={outcomeChoice === "none"}
+                  onChange={() => setOutcomeChoice("none")}
+                />
+                Non
+              </label>
+            </div>
             {outcomeChoice === "pending_follow_up" && (
-              <div className="ml-6 grid gap-2 sm:grid-cols-2">
-                <input
-                  placeholder="Effet attendu"
-                  value={expectedOutcome}
-                  onChange={(e) => setExpectedOutcome(e.target.value)}
-                  className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                />
-                <input
-                  type="date"
-                  value={followUpDate}
-                  onChange={(e) => setFollowUpDate(e.target.value)}
-                  className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-                />
+              <div className="ml-6 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Effet attendu</label>
+                  <input
+                    placeholder="Ex : baisse du taux d'échec scolaire"
+                    value={expectedOutcome}
+                    onChange={(e) => setExpectedOutcome(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Date de suivi prévue</label>
+                  <input
+                    type="date"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                  />
+                </div>
               </div>
             )}
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="outcome-choice"
-                checked={outcomeChoice === "none"}
-                onChange={() => setOutcomeChoice("none")}
-              />
-              Aucun effet mesurable visé
-            </label>
+            {outcomeChoice === "none" && (
+              <p className="ml-6 text-xs text-muted">
+                Ce projet est une activité (ex : distribution, collecte, formation) sans effet mesurable
+                visé pour l&apos;instant — c&apos;est le cas de beaucoup de projets, ce n&apos;est pas un
+                problème.
+              </p>
+            )}
           </div>
         )}
       </section>
