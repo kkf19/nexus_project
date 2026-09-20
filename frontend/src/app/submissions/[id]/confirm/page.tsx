@@ -584,7 +584,7 @@ export default function ConfirmPage() {
         <div className="mt-3 grid gap-4 sm:grid-cols-3">
           <div>
             <div className="mb-1 flex items-center gap-1">
-              <label className="text-xs text-muted">Bénévoles JCI</label>
+              <label className="text-xs text-muted">Combien de membres JCI impliqués ?</label>
               <OriginBadge origin={fieldOrigin(extraction?.project?.jci_volunteers_count, volunteersStr)} />
             </div>
             <input
@@ -637,8 +637,8 @@ export default function ConfirmPage() {
         )}
         {!resourcesOk && (
           <p className="mt-2 text-xs text-danger">
-            Bénévoles JCI, durée et heures de bénévolat sont obligatoires (0 est accepté, un champ vide ne
-            l&apos;est pas).
+            Le nombre de membres JCI impliqués, la durée et les heures de bénévolat sont obligatoires (0 est
+            accepté, un champ vide ne l&apos;est pas).
           </p>
         )}
       </section>
