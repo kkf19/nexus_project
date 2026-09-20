@@ -779,6 +779,15 @@ function SdgsScreen({
   if (sdgs.length === 0) {
     return <p className="text-sm text-muted">Aucun projet classé sur un ODD pour ce filtre.</p>;
   }
+  // Barres intégrées à la colonne "Personnes touchées" (brief étape 5, p. 5) :
+  // largeur proportionnelle à la valeur, jamais dessinée pour un "inconnu"
+  // (§13 du prompt produit -- unknown ≠ 0, aucune barre pour ce qu'on ne sait
+  // pas). Le maximum se calcule uniquement sur les ODD dont la valeur est
+  // connue, sur ce même écran.
+  const maxExternal = Math.max(
+    1,
+    ...sdgs.map((s) => sumDirectPeople(s.aggregates, "external")).filter((r) => r.count > 0).map((r) => r.value)
+  );
   return (
     <section className="rounded-2xl border border-border bg-surface p-5">
       <table className="w-full border-collapse text-sm">
@@ -789,6 +798,7 @@ function SdgsScreen({
             <th className="py-2 pr-3 font-medium">Secondaire</th>
             <th className="py-2 pr-3 font-medium">Personnes touchées (externe)</th>
             <th className="py-2 pr-3 font-medium">Résultat mesuré</th>
+            <th className="py-2 pr-3 font-medium"></th>
           </tr>
         </thead>
         <tbody>
@@ -833,7 +843,15 @@ function SdgsScreen({
                       />
                     </span>
                   ) : (
-                    <span className="text-foreground">{fmt(external.value)}</span>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="nexus-figure text-foreground">{fmt(external.value)}</span>
+                      <span className="h-1.5 w-24 overflow-hidden rounded-full bg-border">
+                        <span
+                          className="block h-full rounded-full bg-accent transition-all duration-500"
+                          style={{ width: `${(external.value / maxExternal) * 100}%` }}
+                        />
+                      </span>
+                    </span>
                   )}
                 </td>
                 <td className="py-3 pr-3 text-foreground">
@@ -845,6 +863,8 @@ function SdgsScreen({
                     </span>
                   )}
                   {s.projects_measured}
+                </td>
+                <td className="py-3 pr-3">
                   <ProjectListDisclosure
                     label="Voir les projets →"
                     view={view}

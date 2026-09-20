@@ -57,10 +57,13 @@ export default function ProjectListDisclosure({
 
   return (
     <div className="mt-2">
+      {/* Bouton fantôme émeraude (brief étape 5, p. 5) : bordure et texte
+          émeraude, jamais de remplissage plein -- ce n'est pas une action
+          principale de l'écran, juste une porte vers le détail. */}
       <button
         type="button"
         onClick={toggle}
-        className="text-xs font-medium text-accent underline underline-offset-2 hover:no-underline"
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-accent/40 px-3 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
       >
         {open ? "Masquer les projets" : label}
       </button>
