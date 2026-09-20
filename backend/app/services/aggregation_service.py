@@ -225,7 +225,7 @@ def run_aggregation(db: Session, *, view: str, scope_organization_id: str | None
         raise AggregationError(f"organisation introuvable : {scope_organization_id}", status_code=404)
 
     rows = _select_candidate_rows(db, view, scope_organization_id, filters)
-    mo_list = [mo_builder.row_to_measurement_object(db, r) for r in rows]
+    mo_list = mo_builder.rows_to_measurement_objects(db, rows)
     # Filet de securite en plus du filtre source_origin ci-dessus (dev-brief.md
     # section 8 : "exclure les MO agregats (parent_measurement_ids non vide)").
     mo_list = [m for m in mo_list if not m.get("parent_measurement_ids")]
@@ -366,7 +366,7 @@ def _last_successful_run(db: Session, *, view: str, scope_organization_id: str |
 
 def _official_jci_facts(db: Session) -> list[dict]:
     rows = db.execute(select(models.Measurement).where(models.Measurement.layer == "OFFICIAL_JCI_FACT")).scalars().all()
-    return [mo_builder.row_to_measurement_object(db, r) for r in rows]
+    return mo_builder.rows_to_measurement_objects(db, rows)
 
 
 def _displayed_quality_issues(db: Session) -> list[dict]:
@@ -443,7 +443,7 @@ def _run_aggregation_readonly(db: Session, *, view: str, scope_organization_id: 
     modifier : celui-ci sert deja /dashboards/{view} en production, on ne
     prend pas le risque d'une regression dessus pour un besoin different."""
     rows = _select_candidate_rows(db, view, scope_organization_id, filters)
-    mo_list = [mo_builder.row_to_measurement_object(db, r) for r in rows]
+    mo_list = mo_builder.rows_to_measurement_objects(db, rows)
     mo_list = [m for m in mo_list if not m.get("parent_measurement_ids")]
     mo_by_id = {m["measurement_id"]: m for m in mo_list}
 

@@ -139,15 +139,12 @@ def mo_to_measurement_row(
 # ---------------------------------------------------------------------------
 # ligne `measurement` (+ tables filles) -> MO (dict)
 # ---------------------------------------------------------------------------
-def row_to_measurement_object(db: Session, row: models.Measurement) -> dict:
-    """Reconstitue un MO complet a partir d'une ligne `measurement`.
-
-    Inclut `derivation[]`, `relations[]` (measurement_relation) et
-    `parent_measurement_ids` (measurement_parent) quand ils existent.
-    Ne fait AUCUN calcul metier : les valeurs viennent telles qu'elles ont
-    ete stockees (par confirm_service ou aggregation_service), qui sont
-    elles-memes le resultat du moteur ou de l'IA+humain.
-    """
+def _base_measurement_object(row: models.Measurement) -> dict:
+    """Partie du MO qui ne depend que de la ligne `measurement` elle-meme
+    (aucune requete DB). Partagee par row_to_measurement_object() et son
+    pendant par lot rows_to_measurement_objects() ci-dessous (correctif perf
+    2026-09-20, D-37) -- une seule construction, jamais deux implementations
+    qui pourraient diverger."""
     mo: dict[str, Any] = {
         "measurement_id": row.measurement_id,
         "standard": row.standard,
@@ -256,11 +253,19 @@ def row_to_measurement_object(db: Session, row: models.Measurement) -> dict:
     if row.validated_at is not None:
         mo["validated_at"] = row.validated_at.isoformat()
 
-    derivations = db.execute(
-        select(models.Derivation)
-        .where(models.Derivation.measurement_id == row.measurement_id)
-        .order_by(models.Derivation.position)
-    ).scalars().all()
+    return mo
+
+
+def _attach_children(
+    mo: dict,
+    derivations: list[models.Derivation],
+    relations: list[models.MeasurementRelation],
+    parents: list[models.MeasurementParent],
+) -> dict:
+    """Ajoute derivation[]/relations[]/parent_measurement_ids a un MO deja
+    construit par _base_measurement_object(), a partir de listes DEJA
+    chargees (une fois par mesure dans row_to_measurement_object(), ou en un
+    lot pour plusieurs mesures dans rows_to_measurement_objects())."""
     if derivations:
         mo["derivation"] = [
             _omit_none({
@@ -272,10 +277,6 @@ def row_to_measurement_object(db: Session, row: models.Measurement) -> dict:
             })
             for d in derivations
         ]
-
-    relations = db.execute(
-        select(models.MeasurementRelation).where(models.MeasurementRelation.measurement_id == row.measurement_id)
-    ).scalars().all()
     if relations:
         mo["relations"] = [
             _omit_none({
@@ -285,13 +286,86 @@ def row_to_measurement_object(db: Session, row: models.Measurement) -> dict:
             })
             for r in relations
         ]
+    if parents:
+        mo["parent_measurement_ids"] = [p.parent_measurement_id for p in parents]
+    return mo
 
+
+def row_to_measurement_object(db: Session, row: models.Measurement) -> dict:
+    """Reconstitue un MO complet a partir d'une ligne `measurement`.
+
+    Inclut `derivation[]`, `relations[]` (measurement_relation) et
+    `parent_measurement_ids` (measurement_parent) quand ils existent.
+    Ne fait AUCUN calcul metier : les valeurs viennent telles qu'elles ont
+    ete stockees (par confirm_service ou aggregation_service), qui sont
+    elles-memes le resultat du moteur ou de l'IA+humain.
+
+    Une mesure a la fois -> 3 requetes (derivation/relations/parents). Pour
+    plusieurs mesures d'un coup, preferer rows_to_measurement_objects()
+    ci-dessous : 3 requetes AU TOTAL (via IN (...)), pas 3 par mesure
+    (correctif perf 2026-09-20, D-37 -- ce N+1, repete dans chacun des ~14
+    recalculs de "Vue d'ensemble" par aggregation_service.py, etait la cause
+    confirmee des 30-50s de chargement releves en direct par KKF)."""
+    mo = _base_measurement_object(row)
+
+    derivations = db.execute(
+        select(models.Derivation)
+        .where(models.Derivation.measurement_id == row.measurement_id)
+        .order_by(models.Derivation.position)
+    ).scalars().all()
+    relations = db.execute(
+        select(models.MeasurementRelation).where(models.MeasurementRelation.measurement_id == row.measurement_id)
+    ).scalars().all()
     parents = db.execute(
         select(models.MeasurementParent)
         .where(models.MeasurementParent.measurement_id == row.measurement_id)
         .order_by(models.MeasurementParent.position)
     ).scalars().all()
-    if parents:
-        mo["parent_measurement_ids"] = [p.parent_measurement_id for p in parents]
 
-    return mo
+    return _attach_children(mo, derivations, relations, parents)
+
+
+def rows_to_measurement_objects(db: Session, rows: list[models.Measurement]) -> list[dict]:
+    """Version par lot de row_to_measurement_object() : EXACTEMENT le meme
+    resultat, mesure par mesure (meme ordre que `rows`), mais 3 requetes SQL
+    au total au lieu de 3 par mesure. Ajoutee le 2026-09-20 (D-37) pour
+    aggregation_service.py, qui reconstruit tous ses MO candidats a chacun
+    des ~14 recalculs d'un chargement de "Vue d'ensemble" -- avec N mesures
+    candidates, l'ancien code faisait 3xN requetes x14, celui-ci en fait
+    3x14. Ne change aucune regle metier ni aucun champ du MO, seulement la
+    facon dont les tables filles sont relues depuis la base."""
+    if not rows:
+        return []
+    ids = [r.measurement_id for r in rows]
+
+    derivations_by_mid: dict[str, list[models.Derivation]] = {}
+    for d in db.execute(
+        select(models.Derivation)
+        .where(models.Derivation.measurement_id.in_(ids))
+        .order_by(models.Derivation.measurement_id, models.Derivation.position)
+    ).scalars().all():
+        derivations_by_mid.setdefault(d.measurement_id, []).append(d)
+
+    relations_by_mid: dict[str, list[models.MeasurementRelation]] = {}
+    for r in db.execute(
+        select(models.MeasurementRelation).where(models.MeasurementRelation.measurement_id.in_(ids))
+    ).scalars().all():
+        relations_by_mid.setdefault(r.measurement_id, []).append(r)
+
+    parents_by_mid: dict[str, list[models.MeasurementParent]] = {}
+    for p in db.execute(
+        select(models.MeasurementParent)
+        .where(models.MeasurementParent.measurement_id.in_(ids))
+        .order_by(models.MeasurementParent.measurement_id, models.MeasurementParent.position)
+    ).scalars().all():
+        parents_by_mid.setdefault(p.measurement_id, []).append(p)
+
+    return [
+        _attach_children(
+            _base_measurement_object(row),
+            derivations_by_mid.get(row.measurement_id, []),
+            relations_by_mid.get(row.measurement_id, []),
+            parents_by_mid.get(row.measurement_id, []),
+        )
+        for row in rows
+    ]

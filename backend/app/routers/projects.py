@@ -89,5 +89,5 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
             "rise_pillars": [p.code for p in pillars],
             "sdgs": [{"goal": s.goal, "role": s.role} for s in sdgs],
         },
-        "measurements": [mo_builder.row_to_measurement_object(db, m) for m in measurements],
+        "measurements": mo_builder.rows_to_measurement_objects(db, measurements),
     }
