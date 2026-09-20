@@ -1,7 +1,7 @@
 import type { CandidateMapping, ConfirmCandidateInput, ExtractionCandidate } from "@/lib/types";
 import QuoteHighlight from "./QuoteHighlight";
 import OriginBadge from "./OriginBadge";
-import { metricLabel } from "@/lib/metricLabels";
+import { metricLabel, unitLabel } from "@/lib/metricLabels";
 
 const COUNT_TYPES = [
   { value: "direct", label: "direct" },
@@ -138,8 +138,11 @@ export default function CandidateCard({
               champ éditable, il n'y a rien à décider ou corriger -- une
               étiquette "Suggestion NEXUS" dessus n'aurait aucun sens. */}
           <div className="mb-1 text-xs text-muted">Unité</div>
-          <div className="rounded-md border border-border bg-background px-2 py-1 text-sm text-muted">
-            {mapping.unit_code}
+          <div
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm text-muted"
+            title={`Code interne : ${mapping.unit_code}`}
+          >
+            {unitLabel(mapping.unit_code)}
           </div>
         </div>
         <div>

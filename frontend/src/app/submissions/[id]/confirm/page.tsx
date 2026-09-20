@@ -257,6 +257,19 @@ export default function ConfirmPage() {
   const canSubmit =
     familiesOk && areasOk && riseOk && sdgsOk && resourcesOk && mixedOk && outcomeOk && !submitting;
 
+  // Barre d'action collante (brief de refonte visuelle, étape 4, p. 6) :
+  // même logique de blocage que `canSubmit` ci-dessus (rien n'y change),
+  // seulement rendue lisible -- la responsable doit savoir QUOI compléter
+  // sans remonter chercher chaque message d'erreur un par un.
+  const missingItems: string[] = [];
+  if (!familiesOk) missingItems.push("au moins une famille d'activité");
+  if (!areasOk) missingItems.push("un domaine principal");
+  if (!riseOk) missingItems.push("RISE (Community Impact)");
+  if (!sdgsOk) missingItems.push("un ODD principal justifié");
+  if (!resourcesOk) missingItems.push("bénévoles, durée et heures");
+  if (!mixedOk) missingItems.push("les chiffres du public mixte");
+  if (!outcomeOk) missingItems.push("le résultat du projet");
+
   function updateOverride(candidateId: string, next: ConfirmCandidateInput) {
     setOverrides((prev) => ({ ...prev, [candidateId]: next }));
   }
@@ -369,7 +382,7 @@ export default function ConfirmPage() {
   const taxAxes = taxonomy!.classification_axes;
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-8 pb-28">
       <div>
         <h1 className="text-xl font-semibold">Vérifiez votre projet</h1>
         <p className="mt-1 text-sm text-muted">Corrigez ce qui doit l&apos;être, puis confirmez.</p>
@@ -695,13 +708,33 @@ export default function ConfirmPage() {
       </section>
       </div>
 
-      <button
-        onClick={handleConfirm}
-        disabled={!canSubmit}
-        className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
-      >
-        {submitting ? "Confirmation en cours…" : "Confirmer le projet"}
-      </button>
+      {/* Barre d'action collante (brief étape 4, p. 6) : reste visible au
+          défilement pour que la personne sache, à tout moment, ce qu'il
+          reste à compléter -- sans changer quand le bouton s'active
+          (`canSubmit`, inchangé). */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm">
+            {missingItems.length === 0 ? (
+              <span className="text-success">Tout est prêt.</span>
+            ) : (
+              <>
+                <span className="font-medium text-warning">
+                  {missingItems.length} point{missingItems.length > 1 ? "s" : ""} à compléter
+                </span>
+                <span className="text-muted"> — {missingItems.join(", ")}</span>
+              </>
+            )}
+          </p>
+          <button
+            onClick={handleConfirm}
+            disabled={!canSubmit}
+            className="shrink-0 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {submitting ? "Confirmation en cours…" : "Confirmer le projet"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
