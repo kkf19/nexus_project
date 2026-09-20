@@ -40,8 +40,6 @@ const SCREENS: { key: Screen; label: string }[] = [
   { key: "sdgs", label: "Par ODD" },
 ];
 
-const BUCKET_ORDER: DisplayBucket[] = ["resource", "activity", "impact", "reach", "other"];
-
 function metricValue(aggregates: Aggregate[], metricCode: string): Aggregate | undefined {
   return aggregates.find((a) => a.metric_code === metricCode);
 }
@@ -241,6 +239,19 @@ function OverviewScreen({
   const internal = sumDirectPeople(ov.aggregates, "internal");
   const hours = metricValue(ov.aggregates, "VOLUNTEER_HOURS");
 
+  // Decision KKF (2026-09-20) : sous les chiffres cles, ne montrer QUE le
+  // detail qui est du vrai impact/resultat (bucket "impact" -- classe
+  // IAOOI OUTCOME/IMPACT_CLAIM, classify.ts). Les buckets "resource"
+  // (ressources mobilisees), "activity" (ce qui a ete fait), "reach"
+  // (portee de communication, explicitement "non compte comme
+  // beneficiaires") et "other" ne sont plus affiches ici : ce sont des
+  // metriques de process/activite, pas de resultat, et un president/
+  // investisseur qui vient lire l'impact n'a pas a les voir (meme principe
+  // que D-34 : si ca n'aide pas a lire l'impact, ca sort de l'affichage).
+  // La donnee n'est pas perdue -- toujours dans l'API et dans le detail par
+  // domaine (ecran "Par domaine") -- seule cette vue la retire.
+  const impactBucket = buckets.impact;
+
   return (
     <>
       {/* Deux lectures jamais mélangées (impact-science.md §7) : "ce que JCI a
@@ -283,22 +294,26 @@ function OverviewScreen({
         <StatCard label="OL actives" value={fmt(ov.ols_active)} />
       </div>
 
-      <div className="space-y-4">
-        {BUCKET_ORDER.filter((b) => buckets[b].length > 0).map((bucket) => (
-          <section key={bucket} className={`rounded-lg border p-4 ${BUCKET_STYLE[bucket]}`}>
-            <h2 className="text-sm font-semibold uppercase tracking-wide">{BUCKET_LABEL[bucket]}</h2>
+      <section className={`rounded-lg border p-4 ${BUCKET_STYLE.impact}`}>
+        <h2 className="text-sm font-semibold uppercase tracking-wide">{BUCKET_LABEL.impact}</h2>
+        {impactBucket.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">
+            Aucun résultat mesuré (par opposition à une simple activité) pour ce filtre pour l&apos;instant.
+          </p>
+        ) : (
+          <>
             <div className="mt-3">
-              <AggregateTable aggregates={buckets[bucket]} onSelect={onSelect} />
+              <AggregateTable aggregates={impactBucket} onSelect={onSelect} />
             </div>
-            {buckets[bucket].some((a) => a.measurement_id === openTraceId) && (
+            {impactBucket.some((a) => a.measurement_id === openTraceId) && (
               <>
                 {traceLoading && <p className="mt-2 text-xs text-muted">Chargement de la traçabilité…</p>}
                 {!traceLoading && trace && <TracePanel trace={trace} />}
               </>
             )}
-          </section>
-        ))}
-      </div>
+          </>
+        )}
+      </section>
     </>
   );
 }
