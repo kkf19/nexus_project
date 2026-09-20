@@ -163,6 +163,36 @@ mark {
   pointer-events: none;
 }
 
+.nexus-transition-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(46, 230, 166, 0.10) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: nexus-sweep 1.7s ease-in-out infinite;
+}
+
+@keyframes nexus-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-transition-loading::after {
+    animation: none;
+  }
+}
+
 /* Halo au focus des champs de saisie principaux (brief p. 4, "zone de texte
    soignée"). Un seul point de vérité pour ce halo, réutilisable partout où
    l'on veut le même traitement (textarea d'accueil, futurs champs clés). */

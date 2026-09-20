@@ -230,38 +230,80 @@ export default function DashboardsPage() {
         />
       </div>
 
-      {loading && <p className="text-sm italic text-muted-2">Un instant…</p>}
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      {data && !loading && screen === "overview" && (
-        <OverviewScreen
-          data={data}
-          buckets={overviewBuckets}
-          openTraceId={openTraceId}
-          trace={trace}
-          traceLoading={traceLoading}
-          onSelect={handleSelect}
-          onSeeByOdd={() => setScreen("sdgs")}
-        />
-      )}
+      {/* Premier chargement (aucune donnee precedente a montrer) : silhouette
+          generique plutot qu'un texte ou un ecran vide. Un changement de vue
+          ou d'annee APRES ce premier chargement garde au contraire l'ecran
+          precedent affiche (voir .nexus-transition ci-dessous) -- correctif
+          perf D-37 (2026-09-20) : ce rechargement prend ~10s au lieu de
+          30-50s, mais on ne laisse plus jamais l'ecran paraitre vide ou
+          fige pendant ce temps, et on ne nomme jamais "calcul"/"traitement"
+          a l'ecran (regle d'or D-35 n3 : le moteur reste interne). */}
+      {!data && loading && <OverviewSkeleton />}
 
-      {data && !loading && screen === "areas" && (
-        <AreasScreen
-          areas={data.areas}
-          view={view}
-          scopeOrganizationId={scopeOrganizationId}
-          reportingYear={reportingYear ? Number(reportingYear) : undefined}
-        />
-      )}
+      {data && (
+        <div className={`nexus-transition${loading ? " nexus-transition-loading" : ""}`}>
+          {screen === "overview" && (
+            <OverviewScreen
+              data={data}
+              buckets={overviewBuckets}
+              openTraceId={openTraceId}
+              trace={trace}
+              traceLoading={traceLoading}
+              onSelect={handleSelect}
+              onSeeByOdd={() => setScreen("sdgs")}
+            />
+          )}
 
-      {data && !loading && screen === "sdgs" && (
-        <SdgsScreen
-          sdgs={data.sdgs}
-          view={view}
-          scopeOrganizationId={scopeOrganizationId}
-          reportingYear={reportingYear ? Number(reportingYear) : undefined}
-        />
+          {screen === "areas" && (
+            <AreasScreen
+              areas={data.areas}
+              view={view}
+              scopeOrganizationId={scopeOrganizationId}
+              reportingYear={reportingYear ? Number(reportingYear) : undefined}
+            />
+          )}
+
+          {screen === "sdgs" && (
+            <SdgsScreen
+              sdgs={data.sdgs}
+              view={view}
+              scopeOrganizationId={scopeOrganizationId}
+              reportingYear={reportingYear ? Number(reportingYear) : undefined}
+            />
+          )}
+        </div>
       )}
+    </div>
+  );
+}
+
+// Silhouette du tout premier chargement (aucune donnee precedente a
+// montrer) -- generique, pas un decalque exact de "Vue d'ensemble", puisque
+// les 3 ecrans partagent le meme chargement de donnees et qu'on ne sait pas
+// encore lequel l'utilisateur regardera. Volontairement discrete
+// (animate-pulse natif Tailwind, aucune animation custom) ; jamais de texte
+// "chargement"/"calcul" (D-38, meme principe que D-35 n3).
+function OverviewSkeleton() {
+  return (
+    <div className="space-y-6" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="animate-pulse rounded-lg border border-border bg-surface p-4">
+            <div className="h-3 w-2/3 rounded bg-border/70" />
+            <div className="mt-3 h-6 w-1/2 rounded bg-border/70" />
+          </div>
+        ))}
+      </div>
+      <div className="animate-pulse rounded-lg border border-border bg-surface p-4">
+        <div className="h-3 w-1/4 rounded bg-border/70" />
+        <div className="mt-4 space-y-2">
+          <div className="h-4 w-full rounded bg-border/70" />
+          <div className="h-4 w-5/6 rounded bg-border/70" />
+          <div className="h-4 w-2/3 rounded bg-border/70" />
+        </div>
+      </div>
     </div>
   );
 }
