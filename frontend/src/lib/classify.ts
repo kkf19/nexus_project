@@ -22,10 +22,15 @@ export function classifyIaooi(iaooiValue: string | undefined, metricCode: string
   }
 }
 
+// "impact" renommé "Résultats mesurés" (revue Product Owner 2026-09-20, §15) :
+// "membres formés" ou "public externe formé" ne sont pas de l'impact au sens
+// où NEXUS l'entend (un changement de long terme) -- ce sont des résultats
+// mesurés à ce stade. Appeler ce bloc "Impact" aurait fait commettre à
+// l'affichage exactement la confusion que le produit prétend corriger.
 export const BUCKET_LABEL: Record<DisplayBucket, string> = {
   resource: "Ressources mobilisées (bénévoles, heures)",
   activity: "Activités et bénéficiaires",
-  impact: "Impact",
+  impact: "Résultats mesurés",
   reach: "Portée de communication — non compté comme bénéficiaires",
   other: "Autres mesures",
 };

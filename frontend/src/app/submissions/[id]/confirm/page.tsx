@@ -103,7 +103,7 @@ export default function ConfirmPage() {
         }
         if (submission.pipeline_status === "failed") {
           setErrorMsg(
-            "Cette fiche n'a pas pu être analysée. Retournez à l'accueil pour relancer l'analyse."
+            "Ce projet n'a pas pu être analysé. Retournez à l'accueil pour relancer l'analyse."
           );
           setPhase("error");
           return;
@@ -116,7 +116,7 @@ export default function ConfirmPage() {
         const structured = draft.candidates.find((c) => c.stage === "structured");
         const standardized = draft.candidates.find((c) => c.stage === "standardized");
         if (!structured || !standardized) {
-          setErrorMsg("L'analyse n'a pas produit de fiche exploitable.");
+          setErrorMsg("L'analyse n'a pas produit de résultat exploitable.");
           setPhase("error");
           return;
         }
@@ -306,7 +306,7 @@ export default function ConfirmPage() {
           else nextGeneral.push(e.message);
         });
         setFieldErrors(nextFieldErrors);
-        setGeneralErrors(nextGeneral.length ? nextGeneral : ["La fiche n'a pas pu être confirmée."]);
+        setGeneralErrors(nextGeneral.length ? nextGeneral : ["Le projet n'a pas pu être confirmé."]);
       } else {
         setGeneralErrors([friendlyErrorMessage(err)]);
       }
@@ -324,8 +324,8 @@ export default function ConfirmPage() {
   if (phase === "already_confirmed") {
     return (
       <div className="rounded-lg border border-success/40 bg-success-bg p-6">
-        <h1 className="text-lg font-semibold text-success">Fiche déjà confirmée</h1>
-        <p className="mt-2 text-sm">Cette fiche a déjà été enregistrée.</p>
+        <h1 className="text-lg font-semibold text-success">Projet déjà confirmé</h1>
+        <p className="mt-2 text-sm">Ce projet a déjà été enregistré dans NEXUS.</p>
         <Link href="/dashboards" className="mt-4 inline-block text-sm font-medium text-accent">
           Voir les tableaux de bord →
         </Link>
@@ -335,7 +335,7 @@ export default function ConfirmPage() {
   if (phase === "error") {
     return (
       <div className="rounded-lg border border-danger/40 bg-danger-bg p-6">
-        <h1 className="text-lg font-semibold text-danger">Impossible d&apos;afficher cette fiche</h1>
+        <h1 className="text-lg font-semibold text-danger">Impossible d&apos;afficher ce projet</h1>
         <p className="mt-2 text-sm">{errorMsg}</p>
         <Link href="/" className="mt-4 inline-block text-sm font-medium text-accent">
           ← Retour à l&apos;accueil
@@ -346,9 +346,10 @@ export default function ConfirmPage() {
   if (phase === "success" && result) {
     return (
       <div className="rounded-lg border border-success/40 bg-success-bg p-6">
-        <h1 className="text-lg font-semibold text-success">Fiche confirmée</h1>
+        <h1 className="text-lg font-semibold text-success">Projet ajouté à NEXUS</h1>
         <p className="mt-2 text-sm">
-          {result.measurement_ids.length} mesure(s) enregistrée(s) pour ce projet.
+          {result.measurement_ids.length} mesure(s) enregistrée(s) — ce projet contribue maintenant aux
+          tableaux de bord national et mondial.
         </p>
         <div className="mt-4 flex gap-3">
           <Link
@@ -358,7 +359,7 @@ export default function ConfirmPage() {
             Voir les tableaux de bord
           </Link>
           <Link href="/" className="rounded-md border border-border px-4 py-2 text-sm font-medium">
-            Nouveau témoignage
+            Nouveau projet
           </Link>
         </div>
       </div>
@@ -370,10 +371,15 @@ export default function ConfirmPage() {
   return (
     <div className="space-y-8 pb-16">
       <div>
-        <h1 className="text-xl font-semibold">Vérifiez la fiche</h1>
-        <p className="mt-1 text-sm text-muted">
-          Chaque case indique son origine. Corrigez ce qui doit l&apos;être, puis confirmez.
-        </p>
+        <h1 className="text-xl font-semibold">Vérifiez votre projet</h1>
+        <p className="mt-1 text-sm text-muted">Corrigez ce qui doit l&apos;être, puis confirmez.</p>
+      </div>
+
+      {/* Sentiment de réussite (revue Product Owner 2026-09-20, §8) : annoncer
+          immédiatement que NEXUS a compris le texte, sans jamais afficher de
+          score de confiance interne ("96 %" ne veut rien dire pour l'OL). */}
+      <div className="rounded-md border border-success/30 bg-success-bg px-4 py-3 text-sm text-success">
+        NEXUS a compris votre projet. Vérifiez les points ci-dessous et corrigez si besoin.
       </div>
 
       {generalErrors.length > 0 && (
@@ -386,7 +392,9 @@ export default function ConfirmPage() {
         </div>
       )}
 
-      {/* Projet, période */}
+      {/* 01 — Votre projet */}
+      <div className="space-y-3">
+      <SectionKicker n={1} label="Votre projet" />
       <section className="rounded-lg border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Le projet</h2>
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
@@ -442,8 +450,11 @@ export default function ConfirmPage() {
           <p className="mt-2 text-xs text-muted">« {extraction.project.period.quote} »</p>
         )}
       </section>
+      </div>
 
-      {/* 1. Quoi */}
+      {/* 02 — Ce que NEXUS a compris : Quoi + Où + RISE + ODD */}
+      <div className="space-y-3">
+      <SectionKicker n={2} label="Ce que NEXUS a compris" />
       <section className="rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Quoi</h2>
@@ -511,8 +522,11 @@ export default function ConfirmPage() {
           </p>
         )}
       </section>
+      </div>
 
-      {/* 5. Pour qui */}
+      {/* 03 — Qui et quelles ressources */}
+      <div className="space-y-3">
+      <SectionKicker n={3} label="Qui et quelles ressources" />
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Pour qui</h2>
         <div className="mt-3 space-y-3">
@@ -615,16 +629,18 @@ export default function ConfirmPage() {
           </p>
         )}
       </section>
+      </div>
 
-      {/* 7. Résultat */}
+      {/* 04 — Ce que le projet a produit */}
+      <div className="space-y-3">
+      <SectionKicker n={4} label="Ce que le projet a produit" />
       <section className="rounded-lg border border-success/40 bg-success-bg p-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-success">Résultat</h2>
         {hasOutcomeCandidate ? (
           <div className="mt-3 space-y-1 text-sm">
             <p>
-              NEXUS classe {outcomeCandidates.length > 1 ? "les chiffres suivants" : "le chiffre suivant"}{" "}
-              comme un <strong>résultat mesuré</strong> (« outcome » — un changement chez les bénéficiaires,
-              pas seulement une activité ou une ressource) :
+              NEXUS a identifié {outcomeCandidates.length > 1 ? "les résultats suivants" : "un résultat"}{" "}
+              pour ce projet — un changement chez les bénéficiaires, pas seulement une activité :
             </p>
             <ul className="ml-4 list-disc">
               {outcomeCandidates.map((c) => (
@@ -677,14 +693,31 @@ export default function ConfirmPage() {
           </div>
         )}
       </section>
+      </div>
 
       <button
         onClick={handleConfirm}
         disabled={!canSubmit}
         className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
       >
-        {submitting ? "Confirmation en cours…" : "Confirmer la fiche"}
+        {submitting ? "Confirmation en cours…" : "Confirmer le projet"}
       </button>
+    </div>
+  );
+}
+
+// Revue Product Owner (2026-09-20, §7) : "les sections devraient raconter une
+// histoire". Un simple repère numéroté 01→05 au-dessus de chaque groupe,
+// sans toucher aux composants existants ni à leurs règles de validation --
+// juste rendre visible la progression Projet → Compréhension → Qui/Ressources
+// → Résultat → Confirmer.
+function SectionKicker({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
+        {n}
+      </span>
+      {label}
     </div>
   );
 }

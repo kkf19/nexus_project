@@ -9,7 +9,7 @@ export default function NavBar() {
         </Link>
         <nav className="flex gap-4 text-sm">
           <Link href="/" className="text-muted hover:text-foreground">
-            Nouveau témoignage
+            Nouveau projet
           </Link>
           <Link href="/dashboards" className="text-muted hover:text-foreground">
             Tableaux de bord

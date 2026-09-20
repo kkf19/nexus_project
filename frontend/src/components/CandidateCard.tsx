@@ -134,10 +134,10 @@ export default function CandidateCard({
           </>
         )}
         <div>
-          <div className="mb-1 flex items-center gap-1">
-            <span className="text-xs text-muted">Unité</span>
-            <OriginBadge origin="inferred" />
-          </div>
+          {/* Pas de badge ici (revue PO 2026-09-20) : l'unité n'est pas un
+              champ éditable, il n'y a rien à décider ou corriger -- une
+              étiquette "Suggestion NEXUS" dessus n'aurait aucun sens. */}
+          <div className="mb-1 text-xs text-muted">Unité</div>
           <div className="rounded-md border border-border bg-background px-2 py-1 text-sm text-muted">
             {mapping.unit_code}
           </div>

@@ -49,6 +49,23 @@ function fmt(value: number | null | undefined): string {
   return value.toLocaleString("fr-FR");
 }
 
+// Libellés humains des piliers RISE (revue PO 2026-09-20, §19 : "REBUILD_ECONOMIES
+// — 1" ressemble à une ligne SQL). Reproduit tel quel depuis
+// docs/technical/taxonomy.config.json (rise_pillars.values[].label -- sourcé
+// du rapport JCI 2025 p.85, jamais traduit ni reformulé pour ne pas altérer
+// une citation) : les 3 seuls piliers que ce référentiel définit
+// aujourd'hui. Le code brut reste consultable via l'attribut title. Un code
+// non reconnu s'affiche tel quel plutôt que d'inventer un libellé.
+const RISE_PILLAR_LABELS: Record<string, string> = {
+  REBUILD_ECONOMIES: "Sustaining and rebuilding economies",
+  WORKFORCE: "Motivating the workforce",
+  MENTAL_HEALTH: "Preserving mental health and well-being",
+};
+
+function risePillarLabel(code: string): string {
+  return RISE_PILLAR_LABELS[code] || code;
+}
+
 export default function DashboardsPage() {
   const [view, setView] = useState<View>("ol");
   const [screen, setScreen] = useState<Screen>("overview");
@@ -125,10 +142,6 @@ export default function DashboardsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Tableaux de bord</h1>
-        <p className="mt-1 text-sm text-muted">
-          Un seul moteur de calcul, trois écrans. Une valeur inconnue s&apos;affiche « inconnu » — aucune
-          cible ni jauge de progression.
-        </p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border">
@@ -321,11 +334,6 @@ function OverviewScreen({
 function AreasScreen({ areas }: { areas: AreaBlock[] }) {
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted">
-        Un projet qui touche plusieurs domaines apparaît dans chaque bloc concerné, avec la mention
-        « domaine secondaire » — la somme des blocs ci-dessous n&apos;est jamais un total (voir « Vue
-        d&apos;ensemble » pour le nombre de projets uniques).
-      </p>
       {areas.map((area) => {
         const volunteers = metricValue(area.aggregates, "VOLUNTEERS");
         const hours = metricValue(area.aggregates, "VOLUNTEER_HOURS");
@@ -335,9 +343,15 @@ function AreasScreen({ areas }: { areas: AreaBlock[] }) {
           <section key={area.code} className="rounded-lg border border-border bg-surface p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold uppercase tracking-wide">{area.label}</h2>
-              <span className="text-sm text-muted">
+              <span
+                className="text-sm text-muted"
+                title={
+                  area.secondary_only_count > 0
+                    ? `Inclut ${area.secondary_only_count} projet(s) qui contribuent aussi à un autre domaine.`
+                    : undefined
+                }
+              >
                 {fmt(area.total_projects)} projets
-                {area.secondary_only_count > 0 && ` (dont ${area.secondary_only_count} en domaine secondaire)`}
               </span>
             </div>
 
@@ -363,17 +377,33 @@ function AreasScreen({ areas }: { areas: AreaBlock[] }) {
                 <p className="mt-2 text-sm">
                   Bénévoles {volunteers ? fmt(volunteers.value) : "inconnu"} · Heures {hours ? fmt(hours.value) : "inconnu"}
                 </p>
+                {/* Garde-fou anti double-comptage (revue PO 2026-09-20, §17) :
+                    un projet actif dans plusieurs domaines apparaît dans
+                    chacun de ses blocs -- sans cette phrase, les mêmes heures
+                    pourraient sembler exister plusieurs fois. Affichée
+                    seulement quand on sait, par le signal déjà disponible
+                    (secondary_only_count), qu'un tel recouvrement existe pour
+                    ce domaine précis -- jamais une mise en garde générique. */}
+                {area.secondary_only_count > 0 && (
+                  <p className="mt-1 text-xs text-muted">
+                    Ressources partagées avec d&apos;autres domaines pour les projets multi-domaines.
+                  </p>
+                )}
               </div>
 
-              {/* Bloc Impact visuellement distinct des ressources et de la portée
-                  (garde-fou D-22) : couleur et bordure différentes, jamais le
-                  même bloc. */}
+              {/* Bloc "Résultats mesurés" visuellement distinct des ressources
+                  et de la portée (garde-fou D-22) : couleur et bordure
+                  différentes, jamais le même bloc. Renommé depuis "Impact"
+                  (revue PO 2026-09-20, §15) : "membres formés" n'est pas de
+                  l'impact au sens de NEXUS (c'est justement la distinction
+                  que le produit prétend faire respecter) -- ce sont des
+                  résultats mesurés, pas encore un changement de long terme. */}
               <div className="rounded-md border border-success/50 bg-success-bg p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide">Impact</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide">Résultats mesurés</h3>
                 <p className="mt-2 text-sm">
                   Membres formés {internal.count === 0 ? "inconnu" : fmt(internal.value)} · Public externe
-                  formé {external.count === 0 ? "inconnu" : fmt(external.value)} · Résultat mesuré{" "}
-                  {fmt(area.projects_measured)}
+                  formé {external.count === 0 ? "inconnu" : fmt(external.value)} · Résultat mesuré :{" "}
+                  {fmt(area.projects_measured)} projet(s)
                 </p>
               </div>
             </div>
@@ -387,8 +417,12 @@ function AreasScreen({ areas }: { areas: AreaBlock[] }) {
                 {area.rise.pillars.length > 0 && (
                   <ul className="mt-2 flex flex-wrap gap-2 text-xs">
                     {area.rise.pillars.map((p) => (
-                      <li key={p.code} className="rounded-full border border-border bg-surface px-2 py-1">
-                        {p.code} — {p.project_count}
+                      <li
+                        key={p.code}
+                        className="rounded-full border border-border bg-surface px-2 py-1"
+                        title={`Code interne : ${p.code}`}
+                      >
+                        {risePillarLabel(p.code)} · {p.project_count}
                       </li>
                     ))}
                   </ul>
