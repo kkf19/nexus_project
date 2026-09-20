@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { friendlyErrorMessage, getDashboard, getDashboardOverview, getTrace } from "@/lib/api";
-import { DEMO_ORGANIZATION_ID } from "@/lib/config";
+import { friendlyErrorMessage, getDashboardOverview, getTrace } from "@/lib/api";
+import { DEMO_ORGANIZATIONS } from "@/lib/config";
 import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, sumDirectPeople, type DisplayBucket } from "@/lib/classify";
 import { SDG_LABELS } from "@/lib/sdgs";
 import AggregateTable from "@/components/AggregateTable";
@@ -12,7 +12,6 @@ import type {
   Aggregate,
   AreaBlock,
   DashboardOverviewResponse,
-  QualityIssue,
   SdgBlock,
   TraceResponse,
 } from "@/lib/types";
@@ -47,16 +46,18 @@ export default function DashboardsPage() {
   const [view, setView] = useState<View>("ol");
   const [screen, setScreen] = useState<Screen>("overview");
   const [reportingYear, setReportingYear] = useState<string>("");
+  // Simulation multi-pays pour la démo (voir lib/config.ts) : quelle OL
+  // fictive regarder sur "Mon OL", quel pays sur "Nationale". Sans effet sur
+  // la vue "Mondiale", qui reste sans restriction (scope_organization_id
+  // undefined -- tous les pays confondus).
+  const [selectedOrgId, setSelectedOrgId] = useState(DEMO_ORGANIZATIONS[0].id);
+  const selectedOrg = DEMO_ORGANIZATIONS.find((o) => o.id === selectedOrgId) || DEMO_ORGANIZATIONS[0];
+  const scopeOrganizationId =
+    view === "global" ? undefined : view === "national" ? selectedOrg.nationalId : selectedOrg.id;
 
   const [data, setData] = useState<DashboardOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Chiffres publiés par JCI et conflits connus (dev-brief.md §2.11, vue
-  // mondiale uniquement) : fonctionnalité de Phase 2/3 inchangée, toujours
-  // servie par /dashboards/{view} (Annexe A #10) -- le nouvel endpoint
-  // /overview ne la duplique pas, on la lit donc à côté, sans s'en servir
-  // pour autre chose (pas d'agrégats/refus réutilisés depuis cet appel).
-  const [qualityIssues, setQualityIssues] = useState<QualityIssue[]>([]);
 
   const [openTraceId, setOpenTraceId] = useState<string | null>(null);
   const [trace, setTrace] = useState<TraceResponse | null>(null);
@@ -70,7 +71,7 @@ export default function DashboardsPage() {
       setOpenTraceId(null);
       try {
         const res = await getDashboardOverview(view, {
-          scope_organization_id: view === "global" ? undefined : DEMO_ORGANIZATION_ID,
+          scope_organization_id: scopeOrganizationId,
           reporting_year: reportingYear ? Number(reportingYear) : undefined,
         });
         if (!cancelled) setData(res);
@@ -84,25 +85,7 @@ export default function DashboardsPage() {
     return () => {
       cancelled = true;
     };
-  }, [view, reportingYear]);
-
-  useEffect(() => {
-    if (view !== "global") {
-      setQualityIssues([]);
-      return;
-    }
-    let cancelled = false;
-    getDashboard("global", { group_by: "network", reporting_year: reportingYear ? Number(reportingYear) : undefined })
-      .then((res) => {
-        if (!cancelled) setQualityIssues(res.quality_issues || []);
-      })
-      .catch(() => {
-        if (!cancelled) setQualityIssues([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [view, reportingYear]);
+  }, [view, reportingYear, scopeOrganizationId]);
 
   const overviewBuckets = useMemo(() => {
     const grouped: Record<DisplayBucket, Aggregate[]> = {
@@ -141,18 +124,36 @@ export default function DashboardsPage() {
         </p>
       </div>
 
-      <div className="flex gap-2 border-b border-border">
-        {VIEWS.map((v) => (
-          <button
-            key={v.key}
-            onClick={() => setView(v.key)}
-            className={`border-b-2 px-3 py-2 text-sm font-medium ${
-              view === v.key ? "border-accent text-accent" : "border-transparent text-muted"
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border">
+        <div className="flex gap-2">
+          {VIEWS.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              className={`border-b-2 px-3 py-2 text-sm font-medium ${
+                view === v.key ? "border-accent text-accent" : "border-transparent text-muted"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        {view !== "global" && (
+          <label className="mb-2 flex items-center gap-2 text-xs text-muted">
+            {view === "national" ? "Pays (démo)" : "OL (démo)"}
+            <select
+              value={selectedOrgId}
+              onChange={(e) => setSelectedOrgId(e.target.value)}
+              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground"
+            >
+              {DEMO_ORGANIZATIONS.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {view === "national" ? org.nationalLabel : org.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -191,7 +192,6 @@ export default function DashboardsPage() {
           trace={trace}
           traceLoading={traceLoading}
           onSelect={handleSelect}
-          qualityIssues={view === "global" ? qualityIssues : []}
         />
       )}
 
@@ -219,7 +219,6 @@ function OverviewScreen({
   trace,
   traceLoading,
   onSelect,
-  qualityIssues,
 }: {
   data: DashboardOverviewResponse;
   buckets: Record<DisplayBucket, Aggregate[]>;
@@ -227,7 +226,6 @@ function OverviewScreen({
   trace: TraceResponse | null;
   traceLoading: boolean;
   onSelect: (a: Aggregate) => void;
-  qualityIssues: QualityIssue[];
 }) {
   const ov = data.overview;
   const external = sumDirectPeople(ov.aggregates, "external");
@@ -300,48 +298,6 @@ function OverviewScreen({
           <RefusalList refusals={ov.refusals} />
         </div>
       </section>
-
-      {qualityIssues.length > 0 && (
-        <section className="rounded-lg border border-border bg-surface p-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Chiffres publiés par JCI — incohérences connues
-          </h2>
-          <p className="mt-1 text-xs text-muted">
-            Affichés à côté du calcul NEXUS, jamais à sa place. NEXUS n&apos;arbitre pas entre ces valeurs.
-          </p>
-          <div className="mt-3 space-y-3">
-            {qualityIssues.map((issue) => (
-              <div key={issue.issue_id} className="rounded-md border border-border bg-background p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{issue.subject}</span>
-                  <span className="rounded-full bg-warning-bg px-2 py-0.5 text-xs text-warning">
-                    {issue.resolution_status}
-                  </span>
-                </div>
-                <ul className="mt-2 space-y-1 text-xs text-muted">
-                  {issue.values.map((v, i) => (
-                    <li key={i}>
-                      <span className="font-medium text-foreground">
-                        {v.value_qualifier === "at_least" ? "≥ " : ""}
-                        {v.value.toLocaleString("fr-FR")} {v.unit}
-                      </span>{" "}
-                      {v.source?.document ? (
-                        <>
-                          — {v.source.document} ({v.source.section}
-                          {v.source.page ? `, p.${v.source.page}` : ""})
-                          {v.source.quote && <span> — « {v.source.quote} »</span>}
-                        </>
-                      ) : v.formula ? (
-                        <span>— calculé : {v.formula}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </>
   );
 }

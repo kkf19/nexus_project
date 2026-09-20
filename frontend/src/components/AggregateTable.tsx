@@ -1,4 +1,5 @@
 import type { Aggregate } from "@/lib/types";
+import { metricLabel } from "@/lib/metricLabels";
 
 // Une valeur NULL s'affiche "inconnu". Aucune cible, objectif, jauge de
 // progression ni pourcentage d'atteinte (D-09, garde-fou produit).
@@ -30,7 +31,9 @@ export default function AggregateTable({
             className={`border-b border-border/60 ${onSelect ? "cursor-pointer hover:bg-background" : ""}`}
             onClick={() => onSelect?.(a)}
           >
-            <td className="py-2 pr-3 font-medium">{a.metric_code}</td>
+            <td className="py-2 pr-3 font-medium" title={`Code interne : ${a.metric_code}`}>
+              {metricLabel(a.metric_code)}
+            </td>
             <td className="py-2 pr-3">
               {a.value === null || a.value === undefined
                 ? "inconnu"

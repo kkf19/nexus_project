@@ -1,6 +1,7 @@
 import type { CandidateMapping, ConfirmCandidateInput, ExtractionCandidate } from "@/lib/types";
 import QuoteHighlight from "./QuoteHighlight";
 import OriginBadge from "./OriginBadge";
+import { metricLabel } from "@/lib/metricLabels";
 
 const COUNT_TYPES = [
   { value: "direct", label: "direct" },
@@ -67,8 +68,11 @@ export default function CandidateCard({
           />
           {mapping.source_wording_class || extraction.metric_label_source}
         </label>
-        <span className="rounded-full bg-border/60 px-2 py-0.5 text-xs text-muted whitespace-nowrap">
-          {mapping.metric_code ?? "non classé"}
+        <span
+          className="rounded-full bg-border/60 px-2 py-0.5 text-xs text-muted whitespace-nowrap"
+          title={mapping.metric_code ? `Code interne : ${mapping.metric_code}` : undefined}
+        >
+          {metricLabel(mapping.metric_code)}
         </span>
       </div>
 

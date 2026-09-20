@@ -1,5 +1,6 @@
 import type { TraceEntry, TraceResponse } from "@/lib/types";
 import QuoteHighlight from "./QuoteHighlight";
+import { metricLabel } from "@/lib/metricLabels";
 
 // Cliquer sur un agrégat descend vers ses MO d'entrée, puis vers le projet,
 // puis vers l'OL, puis vers le texte brut, citation surlignée (dev-brief §3.3).
@@ -31,9 +32,9 @@ function TraceEntryCard({ entry }: { entry: TraceEntry }) {
   return (
     <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs">
       <div className="flex items-center justify-between">
-        <span className="font-medium">
-          {entry.kind === "aggregate" ? "Agrégat" : "Mesure source"} — {m?.metric_code} = {m?.value ?? "inconnu"}{" "}
-          {m?.unit?.code}
+        <span className="font-medium" title={m?.metric_code ? `Code interne : ${m.metric_code}` : undefined}>
+          {entry.kind === "aggregate" ? "Agrégat" : "Mesure source"} — {metricLabel(m?.metric_code)} ={" "}
+          {m?.value ?? "inconnu"} {m?.unit?.code}
         </span>
         <span className="text-muted">{entry.measurement_id}</span>
       </div>

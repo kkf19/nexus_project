@@ -212,9 +212,17 @@ export default function ConfirmPage() {
   const mainCandidates = candidateList.filter((c) => c.mapping.metric_code !== "COMM_AUDIENCE");
   const audienceCandidates = candidateList.filter((c) => c.mapping.metric_code === "COMM_AUDIENCE");
 
-  const hasOutcomeCandidate = candidateList.some(
+  // Bug de communication constaté en démo (2026-09-20) : le bandeau "Résultat"
+  // affirmait qu'un résultat mesuré avait été identifié "dans les chiffres
+  // ci-dessus (« Pour qui »)" — mais la vraie raison n'est pas le champ
+  // "Pour qui" (internal_external), c'est la classification IAOOI = OUTCOME
+  // d'un candidat retenu, qui n'est elle-même visible nulle part ailleurs sur
+  // la fiche. Le SG n'avait donc aucun moyen de comprendre l'affirmation.
+  // On nomme maintenant explicitement le(s) candidat(s) responsables.
+  const outcomeCandidates = candidateList.filter(
     (c) => overrides[c.extraction.candidate_id]?.include && c.mapping.iaooi_value === "OUTCOME"
   );
+  const hasOutcomeCandidate = outcomeCandidates.length > 0;
 
   const ciPresent = areas.some((a) => a.code === "CI");
   const primaryAreaCount = areas.filter((a) => a.role === "primary").length;
@@ -612,9 +620,24 @@ export default function ConfirmPage() {
       <section className="rounded-lg border border-success/40 bg-success-bg p-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-success">Résultat</h2>
         {hasOutcomeCandidate ? (
-          <p className="mt-3 text-sm">
-            Un résultat mesuré a été identifié dans les chiffres ci-dessus (« Pour qui »).
-          </p>
+          <div className="mt-3 space-y-1 text-sm">
+            <p>
+              NEXUS classe {outcomeCandidates.length > 1 ? "les chiffres suivants" : "le chiffre suivant"}{" "}
+              comme un <strong>résultat mesuré</strong> (« outcome » — un changement chez les bénéficiaires,
+              pas seulement une activité ou une ressource) :
+            </p>
+            <ul className="ml-4 list-disc">
+              {outcomeCandidates.map((c) => (
+                <li key={c.extraction.candidate_id}>
+                  {c.mapping.source_wording_class || c.extraction.metric_label_source}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted">
+              Ce projet est donc marqué automatiquement « résultat mesuré » — pas besoin de répondre à la
+              question de suivi ci-dessous.
+            </p>
+          </div>
         ) : (
           <div className="mt-3 space-y-2 text-sm">
             <label className="flex items-center gap-2">

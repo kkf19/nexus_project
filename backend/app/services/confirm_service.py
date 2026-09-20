@@ -61,6 +61,28 @@ RESOURCE_NO_QUOTE_METHOD = (
     "texte source soumis."
 )
 
+# Bug constate en demo (2026-09-20) : measurement-object.schema.json impose
+# confidence in {H, M, L} partout ou ce champ existe (P1). Le schema JSON
+# envoye au modele (ai_pipeline.py) declare deja cet enum comme "required",
+# mais rien ne garantit qu'un LLM respecte toujours un enum pour un champ qui
+# exprime sa PROPRE incertitude -- il peut renvoyer confidence=null au lieu
+# de choisir une valeur quand le texte source est ambigu. Sans ce garde-fou,
+# cela fait echouer TOUTE la confirmation de la fiche avec une erreur de
+# schema illisible pour le SG ("derivation/1/confidence: None is not one of
+# [...]"), alors que la valeur elle-meme (avec sa citation source) reste
+# parfaitement valide et ne devrait pas etre perdue pour autant.
+#
+# Decision (a confirmer/documenter au decision log si le projet continue) :
+# une confiance absente est traitee comme la plus BASSE (L), jamais H ni M --
+# on ne fabrique jamais une certitude que l'IA n'a pas exprimee (section 2
+# des instructions produit, "no unsupported inference"). C'est un defaut
+# defensif au point d'ecriture, pas une correction de l'IA elle-meme.
+_VALID_CONFIDENCE = {"H", "M", "L"}
+
+
+def _safe_confidence(value: str | None) -> str:
+    return value if value in _VALID_CONFIDENCE else "L"
+
 
 class ConfirmError(Exception):
     """Erreur de validation bloquante : rien ne doit etre ecrit en base."""
@@ -267,9 +289,9 @@ def _build_measurement_object(
 
     derivation = [
         {"step": "extract_number", "rule_id": "EXTRACT-NUM", "agent": "llm_extractor@v0",
-         "confidence": extraction_cand.get("confidence")},
+         "confidence": _safe_confidence(extraction_cand.get("confidence"))},
         {"step": "classify", "rule_id": "MAP-METRIC", "agent": "llm_classifier@v0",
-         "confidence": mapping.get("confidence")},
+         "confidence": _safe_confidence(mapping.get("confidence"))},
     ]
     if corrected:
         derivation.append({"step": "human_validation", "rule_id": "HUMAN-CONFIRM", "agent": "human@ol",
@@ -290,7 +312,7 @@ def _build_measurement_object(
             "layer": "SEMANTIC_INTERPRETATION",
             "standard": "PROPOSED_STANDARD:IAOOI-v0",
             "rule_id": "MAP-METRIC",
-            "confidence": mapping.get("confidence"),
+            "confidence": _safe_confidence(mapping.get("confidence")),
         },
         "source_wording_class": mapping.get("source_wording_class"),
         "taxonomy_refs": {
@@ -334,7 +356,7 @@ def _build_measurement_object(
             "language": submission.language,
         },
         "derivation": derivation,
-        "confidence": extraction_cand.get("confidence"),
+        "confidence": _safe_confidence(extraction_cand.get("confidence")),
         "verification_status": "reported",
     }
     if relations:

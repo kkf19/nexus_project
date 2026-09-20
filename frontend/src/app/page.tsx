@@ -3,11 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSubmission, friendlyErrorMessage, retrySubmission } from "@/lib/api";
-import { DEMO_ORGANIZATION_ID, DEMO_USER_ID } from "@/lib/config";
+import { DEMO_ORGANIZATIONS, DEMO_USER_ID } from "@/lib/config";
 
 export default function Home() {
   const router = useRouter();
   const [text, setText] = useState("");
+  // Simulation multi-pays pour la démo (pas d'écran de connexion, voir
+  // lib/config.ts) : "en tant que quelle OL" est un simple choix explicite
+  // sur cet écran, pas une identité connectée.
+  const [organizationId, setOrganizationId] = useState(DEMO_ORGANIZATIONS[0].id);
   const [clientError, setClientError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Le texte reste dans `text` (jamais effacé en cas d'échec) : on ne
@@ -28,7 +32,7 @@ export default function Home() {
     setLoading(true);
     try {
       const submission = await createSubmission({
-        organization_id: DEMO_ORGANIZATION_ID,
+        organization_id: organizationId,
         user_id: DEMO_USER_ID,
         raw_text: text,
       });
@@ -105,6 +109,20 @@ export default function Home() {
         de comprendre ce que vous avez écrit.
       </p>
       <form onSubmit={handleSubmit} className="mt-6">
+        <label className="mb-1 block text-xs font-medium text-muted">
+          Vous soumettez en tant que (démo)
+        </label>
+        <select
+          value={organizationId}
+          onChange={(e) => setOrganizationId(e.target.value)}
+          className="mb-3 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+        >
+          {DEMO_ORGANIZATIONS.map((org) => (
+            <option key={org.id} value={org.id}>
+              {org.label}
+            </option>
+          ))}
+        </select>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
