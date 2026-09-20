@@ -790,7 +790,14 @@ function SdgsScreen({
   );
   return (
     <section className="rounded-2xl border border-border bg-surface p-5">
-      <table className="w-full border-collapse text-sm">
+      {/* Finitions (brief étape 6) : à 390px, ce tableau à 6 colonnes ne
+          peut pas tenir sans dégrader la lecture -- on isole le défilement
+          horizontal à CE tableau plutôt que de laisser la page entière
+          défiler horizontalement. Indice de défilement visible seulement
+          sur petit écran (sur desktop, tout tient déjà). */}
+      <p className="mb-2 text-xs text-muted-2 sm:hidden">Faites glisser pour voir toutes les colonnes →</p>
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
             <th className="py-2 pr-3 font-medium">ODD</th>
@@ -878,6 +885,7 @@ function SdgsScreen({
           })}
         </tbody>
       </table>
+      </div>
       <p className="mt-3 text-xs text-muted-2">
         Principal et secondaire ne sont jamais additionnés en un seul chiffre (D-27).
       </p>

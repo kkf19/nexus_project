@@ -172,6 +172,18 @@ mark {
   box-shadow: 0 0 0 4px rgba(46, 230, 166, 0.14), 0 0 24px rgba(46, 230, 166, 0.12);
 }
 
+/* Finitions (brief étape 6) : anneau de focus émeraude visible au clavier
+   sur TOUT élément interactif -- boutons, liens, cases, champs -- pas
+   seulement la zone de texte d'accueil ci-dessus. `:focus-visible` ne se
+   déclenche pas sur un simple clic souris, donc aucune bordure parasite
+   n'apparaît pour un usage à la souris ; `.nexus-focus-halo` garde son
+   propre traitement (spécificité plus forte, `outline: none` l'emporte). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* Écran "Analyse en cours…" (brief p. 4) : moment signature de la démo.
    Un balayage lumineux traverse le texte soumis, de haut en bas, tant que
    l'analyse tourne -- jamais un pourcentage inventé, juste un signe de vie. */

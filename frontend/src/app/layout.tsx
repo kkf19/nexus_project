@@ -23,7 +23,11 @@ const jost = localFont({
 export const metadata: Metadata = {
   title: "NEXUS — Suivi d'impact JCI",
   description: "Racontez votre activité, NEXUS s'occupe du reste.",
-  icons: { icon: "/logo-nexus.png" },
+  // Favicon : src/app/icon.svg (convention Next.js -- détection et balises
+  // <link> automatiques). Remplace l'ancien logo-nexus.png, un carré noir
+  // plein avec l'étoile évidée en blanc -- exactement ce que le brief de
+  // refonte demande de remplacer ("sans carré", p.2). La nouvelle icône
+  // reprend le tracé de NexusMark (étoile à 4 branches concave) en émeraude.
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
