@@ -79,3 +79,37 @@ export const RISE_PILLAR_LABELS: Record<string, string> = {
 export function risePillarLabel(code: string): string {
   return RISE_PILLAR_LABELS[code] || code;
 }
+
+// Libellés d'unité, français, présentation uniquement (refonte visuelle
+// 2026-09-20 : "les unités brutes (job, person) peuvent s'afficher en
+// français côté présentation"). Ne touche à aucune donnée ni schéma --
+// mêmes codes stockés, seul l'affichage change. Ceci recoupe une partie du
+// chantier D-38 (transition de chargement + libellés d'unité, mis en pause
+// dans une autre conversation) : cette fonction est ajoutée ici pour les
+// tuiles "Résultats mesurés" de la Vue d'ensemble, dans le cadre strict de
+// la mission de refonte visuelle en cours, pas comme une reprise de D-38 --
+// D-38 reste un chantier séparé, à finir selon son propre handoff.
+export const UNIT_LABELS_FR: Record<string, string> = {
+  person: "personne(s)",
+  hour: "heure(s)",
+  item: "objet(s)",
+  kg: "kg",
+  t: "tonne(s)",
+  kW: "kW",
+  signature: "signature(s)",
+  agreement: "accord(s)",
+  document: "document(s)",
+  percent: "%",
+  ratio: "ratio",
+  currency: "unité monétaire",
+  view: "vue(s)",
+  tree: "arbre(s)",
+  team: "équipe(s)",
+  application: "candidature(s)",
+  job: "emploi(s)",
+};
+
+export function unitLabel(code: string | null | undefined): string {
+  if (!code) return "unité non précisée";
+  return UNIT_LABELS_FR[code] || code;
+}

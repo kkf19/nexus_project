@@ -1,30 +1,68 @@
 @import "tailwindcss";
 
+/* ============================================================
+   NEXUS — thème sombre (refonte visuelle, 2026-09-20)
+   Présentation uniquement : ces tokens pilotent toutes les classes
+   Tailwind existantes (bg-surface, text-muted, border-border, ...)
+   sans qu'aucun composant n'ait besoin de changer de nom de classe.
+   Direction : noir profond teinté de vert, émeraude lumineux,
+   réseau de points, typographie géométrique très espacée (cf.
+   NEXUS_design_brief.pdf, page 2 — système visuel du deck).
+   ============================================================ */
+
 :root {
-  --background: #f7f7f8;
-  --foreground: #1a1a1e;
-  --surface: #ffffff;
-  --border: #e2e2e6;
-  --muted: #6b6b74;
-  --accent: #2f5fce;
-  --accent-foreground: #ffffff;
-  --success: #1a7f4e;
-  --success-bg: #e8f5ee;
-  --warning: #92620a;
-  --warning-bg: #fdf2df;
-  --danger: #b3261e;
-  --danger-bg: #fbe9e8;
-  --info: #2f5fce;
-  --info-bg: #eaf0fd;
+  color-scheme: dark;
+
+  /* Fond / surfaces */
+  --background: #060908;
+  --surface: #0b100e;
+  --surface-elevated: #111815;
+
+  /* Bordures */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Texte */
+  --foreground: #e8eeea;
+  --muted: #9aa6a0;
+  --muted-2: #7a867f;
+
+  /* Accent — marque NEXUS */
+  --accent: #2ee6a6;
+  --accent-hover: #5cf0be;
+  --accent-deep: #0e3a2d;
+  --accent-foreground: #04120c;
+
+  /* États sémantiques (succès = l'émeraude, jamais une couleur à part) */
+  --success: #2ee6a6;
+  --success-bg: rgba(46, 230, 166, 0.12);
+  --warning: #f5b74a;
+  --warning-bg: rgba(245, 183, 74, 0.14);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.14);
+  --info: #2ee6a6;
+  --info-bg: rgba(46, 230, 166, 0.12);
+
+  /* Couleurs de domaine (Areas of Opportunity) — constantes partout,
+     jamais l'émeraude, toujours accompagnées d'un libellé. */
+  --domain-business: #5b8cff;
+  --domain-individual: #a78bfa;
+  --domain-international: #ff8a5b;
+  --domain-community: #f472b6;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-deep: var(--accent-deep);
   --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
@@ -34,17 +72,99 @@
   --color-danger-bg: var(--danger-bg);
   --color-info: var(--info);
   --color-info-bg: var(--info-bg);
+  --color-domain-business: var(--domain-business);
+  --color-domain-individual: var(--domain-individual);
+  --color-domain-international: var(--domain-international);
+  --color-domain-community: var(--domain-community);
+
+  --font-sans: var(--font-jost), -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+  background: #060908;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(ellipse 1100px 560px at 50% -8%, rgba(46, 230, 166, 0.1), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
 }
 
+/* Chiffres tabulaires pour les KPI et le chiffre vedette. */
+.nexus-figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.nexus-hero-figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-size: clamp(56px, 8vw, 108px);
+}
+
+/* Micro-libellés en majuscules espacées, utilisés pour tous les
+   petits titres de carte (PROJETS, HEURES DE BÉNÉVOLAT, ...). */
+.nexus-label {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Surlignage des extraits sources : ambre translucide (jamais le jaune
+   plein d'origine), le texte reste lisible sur fond sombre. */
 mark {
-  background: #fde68a;
+  background: rgba(245, 183, 74, 0.22);
   color: inherit;
-  padding: 0 1px;
-  border-radius: 2px;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+/* Motif de marque : réseau de points reliés, très basse opacité, jamais
+   derrière du texte utile (coin d'accueil, bas de l'écran d'attente,
+   entête du tableau de bord). Purement décoratif -- aria-hidden côté
+   composant. */
+.nexus-network-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: screen;
+}
+
+/* Halo doux derrière un bloc clé (voir page 2 du brief). */
+.nexus-halo::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 30% 20%, rgba(46, 230, 166, 0.16), transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Transition de tableau de bord : pendant un rechargement, jamais de texte
+   "calcul en cours" -- un léger reflet lumineux traverse l'écran précédent. */
+.nexus-transition {
+  position: relative;
+  transition: opacity 320ms ease;
+}
+
+.nexus-transition-loading {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexus-count-anim {
+    transition: none !important;
+  }
 }

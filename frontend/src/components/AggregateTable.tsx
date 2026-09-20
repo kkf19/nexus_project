@@ -1,5 +1,5 @@
 import type { Aggregate } from "@/lib/types";
-import { metricLabel } from "@/lib/metricLabels";
+import { metricLabel, unitLabel } from "@/lib/metricLabels";
 
 // Une valeur NULL s'affiche "inconnu". Aucune cible, objectif, jauge de
 // progression ni pourcentage d'atteinte (D-09, garde-fou produit).
@@ -36,6 +36,12 @@ function distinguishingSuffix(a: Aggregate, siblings: Aggregate[]): string | nul
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+// Refonte visuelle 2026-09-20 : le tableau devient une grille de tuiles
+// "preuve" émeraude (NEXUS_design_brief.pdf p.3, bloc RÉSULTATS MESURÉS) --
+// même donnée, même valeurs, même règle "inconnu ≠ 0" (D-13), seule la mise
+// en forme change. Reste utilisé uniquement pour le bucket "impact" de la
+// Vue d'ensemble (voir dashboards/page.tsx) ; même signature (aggregates,
+// onSelect) qu'avant, pas de renommage.
 export default function AggregateTable({
   aggregates,
   onSelect,
@@ -55,41 +61,36 @@ export default function AggregateTable({
   });
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
-          <th className="py-2 pr-3 font-medium">Indicateur</th>
-          <th className="py-2 pr-3 font-medium">Valeur</th>
-          <th className="py-2 pr-3 font-medium">Unité</th>
-        </tr>
-      </thead>
-      <tbody>
-        {aggregates.map((a) => {
-          const suffix = distinguishingSuffix(a, byMetric.get(a.metric_code) || []);
-          const sourceCount = a.inputs?.length ?? 1;
-          return (
-            <tr
-              key={a.measurement_id}
-              className={`border-b border-border/60 ${onSelect ? "cursor-pointer hover:bg-background" : ""}`}
-              onClick={() => onSelect?.(a)}
-            >
-              <td className="py-2 pr-3 font-medium" title={`Code interne : ${a.metric_code}`}>
-                {metricLabel(a.metric_code)}
-                {suffix && <span className="ml-1 font-normal text-muted">({suffix})</span>}
-              </td>
-              <td className="py-2 pr-3">
-                {a.value === null || a.value === undefined
-                  ? "inconnu"
-                  : `${a.value_qualifier === "approx" ? "≈ " : ""}${a.value.toLocaleString("fr-FR")}`}
-                {sourceCount > 1 && (
-                  <span className="ml-1.5 text-xs text-muted">· {sourceCount} projets combinés</span>
-                )}
-              </td>
-              <td className="py-2 pr-3 text-muted">{a.unit?.code || "—"}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {aggregates.map((a) => {
+        const suffix = distinguishingSuffix(a, byMetric.get(a.metric_code) || []);
+        const sourceCount = a.inputs?.length ?? 1;
+        const known = a.value !== null && a.value !== undefined;
+        return (
+          <button
+            key={a.measurement_id}
+            type="button"
+            onClick={() => onSelect?.(a)}
+            className={`rounded-xl border border-success/30 bg-success-bg p-4 text-left transition-colors ${
+              onSelect ? "hover:border-success/60" : "cursor-default"
+            }`}
+          >
+            <div className="nexus-figure text-4xl text-foreground">
+              {known
+                ? `${a.value_qualifier === "approx" ? "≈ " : ""}${a.value!.toLocaleString("fr-FR")}`
+                : <span className="text-2xl italic text-muted-2">inconnu</span>}
+            </div>
+            <div className="mt-1.5 text-sm text-foreground" title={`Code interne : ${a.metric_code}`}>
+              {metricLabel(a.metric_code)}
+              {suffix && <span className="ml-1 text-muted">({suffix})</span>}
+            </div>
+            <div className="mt-0.5 text-xs text-muted" title={`Code interne : ${a.unit?.code || "—"}`}>
+              {unitLabel(a.unit?.code)}
+              {sourceCount > 1 && <span className="ml-1.5">· {sourceCount} projets combinés</span>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }

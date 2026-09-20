@@ -20,9 +20,14 @@ export type Origin = "written" | "inferred" | "calculated" | "to_fill";
 //   reste visible.
 const VISIBLE_ORIGINS: Origin[] = ["inferred", "to_fill"];
 
+// Refonte visuelle 2026-09-20 : "Suggestion NEXUS" passe du jaune d'alerte à
+// l'émeraude translucide (une proposition du produit, pas un avertissement)
+// avec une petite étoile de marque ; "à compléter" reste en rouge doux, une
+// vraie action est requise. Présentation uniquement -- mêmes deux origines
+// visibles, même logique (VISIBLE_ORIGINS ci-dessus, décision PO inchangée).
 const STYLES: Record<Origin, string> = {
   written: "",
-  inferred: "bg-warning-bg text-warning border-warning/30",
+  inferred: "bg-accent/10 text-accent border-accent/30",
   calculated: "",
   to_fill: "bg-danger-bg text-danger border-danger/30",
 };
@@ -38,8 +43,13 @@ export default function OriginBadge({ origin, className = "" }: { origin: Origin
   if (!VISIBLE_ORIGINS.includes(origin)) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${STYLES[origin]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${STYLES[origin]} ${className}`}
     >
+      {origin === "inferred" && (
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 1.5C12 8.4 16.6 12 22.5 12 16.6 12 12 15.6 12 22.5 12 15.6 7.4 12 1.5 12 7.4 12 12 8.4 12 1.5Z" />
+        </svg>
+      )}
       {LABELS[origin]}
     </span>
   );

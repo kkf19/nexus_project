@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { friendlyErrorMessage, getDashboardOverview, getTrace } from "@/lib/api";
 import { DEMO_ORGANIZATIONS } from "@/lib/config";
 import { BUCKET_LABEL, BUCKET_STYLE, classifyIaooi, sumDirectPeople, type DisplayBucket } from "@/lib/classify";
 import { SDG_LABELS } from "@/lib/sdgs";
+import { domainColor } from "@/lib/domainColors";
 import AggregateTable from "@/components/AggregateTable";
 import ProjectListDisclosure from "@/components/ProjectListDisclosure";
 import TracePanel from "@/components/TracePanel";
@@ -36,6 +37,13 @@ const VIEWS: { key: View; label: string }[] = [
 // modifie) et exposes par l'API pour l'equipe et les tests -- ils ne sont
 // simplement plus render ici. Voir aussi la suppression du bloc "26
 // conflits" du meme jour, meme logique.
+//
+// Refonte visuelle 2026-09-20 (NEXUS_design_brief.pdf) : présentation
+// uniquement -- aucune route, appel API, calcul ou schéma touché dans ce
+// fichier. Seules la mise en forme de l'écran et deux mini-visualisations
+// "Vue d'ensemble" (projets par domaine, personnes touchées par ODD) ont été
+// ajoutées, entièrement rebranchées sur les agrégats déjà chargés par
+// getDashboardOverview (data.areas / data.sdgs) -- aucune nouvelle donnée.
 const SCREENS: { key: Screen; label: string }[] = [
   { key: "overview", label: "Vue d'ensemble" },
   { key: "areas", label: "Par domaine (Area)" },
@@ -49,6 +57,40 @@ function metricValue(aggregates: Aggregate[], metricCode: string): Aggregate | u
 function fmt(value: number | null | undefined): string {
   if (value === null || value === undefined) return "inconnu";
   return value.toLocaleString("fr-FR");
+}
+
+// Compteur animé (chiffre vedette + KPI) : anime UNIQUEMENT vers la valeur
+// réelle déjà reçue de l'API -- jamais de fausse progression, jamais de
+// pourcentage inventé (même règle que l'écran d'attente du brief). Respecte
+// prefers-reduced-motion (saut direct à la valeur finale).
+function useCountUp(target: number | null, durationMs = 900): number | null {
+  const [display, setDisplay] = useState<number>(target ?? 0);
+  const prevTarget = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (target === null) return;
+    const reduceMotion =
+      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const start = prevTarget.current ?? 0;
+    if (reduceMotion || start === target) {
+      setDisplay(target);
+      prevTarget.current = target;
+      return;
+    }
+    const startTime = performance.now();
+    let raf = 0;
+    function tick(now: number) {
+      const progress = Math.min(1, (now - startTime) / durationMs);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(start + (target! - start) * eased));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    prevTarget.current = target;
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+
+  return target === null ? null : display;
 }
 
 export default function DashboardsPage() {
@@ -126,20 +168,22 @@ export default function DashboardsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Tableaux de bord</h1>
+        <div className="nexus-label mb-1">NEXUS · Infrastructure d&apos;impact</div>
+        <h1 className="text-3xl font-light tracking-tight text-foreground">Tableaux de bord</h1>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border">
-        <div className="flex gap-2">
+        <div className="flex gap-6">
           {VIEWS.map((v) => (
             <button
               key={v.key}
               onClick={() => setView(v.key)}
-              className={`border-b-2 px-3 py-2 text-sm font-medium ${
-                view === v.key ? "border-accent text-accent" : "border-transparent text-muted"
+              className={`relative px-0.5 py-2.5 text-sm transition-colors ${
+                view === v.key ? "text-foreground" : "text-muted hover:text-foreground"
               }`}
             >
               {v.label}
+              {view === v.key && <span className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-accent" />}
             </button>
           ))}
         </div>
@@ -149,7 +193,7 @@ export default function DashboardsPage() {
             <select
               value={selectedOrgId}
               onChange={(e) => setSelectedOrgId(e.target.value)}
-              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground"
+              className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-accent/50"
             >
               {DEMO_ORGANIZATIONS.map((org) => (
                 <option key={org.id} value={org.id}>
@@ -167,10 +211,10 @@ export default function DashboardsPage() {
             <button
               key={s.key}
               onClick={() => setScreen(s.key)}
-              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
                 screen === s.key
-                  ? "border-accent bg-accent text-accent-foreground"
-                  : "border-border bg-surface text-foreground hover:border-accent/50"
+                  ? "border-accent/40 bg-accent/10 text-accent"
+                  : "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground"
               }`}
             >
               {s.label}
@@ -182,11 +226,11 @@ export default function DashboardsPage() {
           placeholder="Année"
           value={reportingYear}
           onChange={(e) => setReportingYear(e.target.value)}
-          className="w-28 rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+          className="w-28 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-2 focus:border-accent/50"
         />
       </div>
 
-      {loading && <p className="text-sm text-muted">Calcul en cours…</p>}
+      {loading && <p className="text-sm italic text-muted-2">Un instant…</p>}
       {error && <p className="text-sm text-danger">{error}</p>}
 
       {data && !loading && screen === "overview" && (
@@ -197,6 +241,7 @@ export default function DashboardsPage() {
           trace={trace}
           traceLoading={traceLoading}
           onSelect={handleSelect}
+          onSeeByOdd={() => setScreen("sdgs")}
         />
       )}
 
@@ -221,12 +266,260 @@ export default function DashboardsPage() {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: ReactNode }) {
+// Réseau de points reliés, motif de marque en basse opacité (brief p.2).
+// Purement décoratif -- aria-hidden, jamais derrière du texte utile.
+function NetworkDecoration({ className = "" }: { className?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
+    <svg
+      className={`nexus-network-bg ${className}`}
+      viewBox="0 0 260 160"
+      fill="none"
+      aria-hidden="true"
+      preserveAspectRatio="xMaxYMax slice"
+    >
+      <g stroke="var(--accent)" strokeOpacity="0.35" strokeWidth="1">
+        <path d="M40 150 L90 100 L150 120 L210 60 L250 90" />
+        <path d="M90 100 L120 40 L180 30 L210 60" />
+        <path d="M150 120 L180 150" />
+        <path d="M120 40 L60 20" />
+      </g>
+      <g fill="var(--accent)" fillOpacity="0.75">
+        <circle cx="40" cy="150" r="2.4" />
+        <circle cx="90" cy="100" r="2" />
+        <circle cx="150" cy="120" r="2" />
+        <circle cx="210" cy="60" r="3" />
+        <circle cx="250" cy="90" r="2" />
+        <circle cx="120" cy="40" r="2" />
+        <circle cx="180" cy="30" r="2" />
+        <circle cx="60" cy="20" r="2" />
+        <circle cx="180" cy="150" r="2" />
+      </g>
+    </svg>
+  );
+}
+
+function RuleChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-background/60 px-2.5 py-1 text-xs text-muted">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v5M12 16.5v.01" strokeLinecap="round" />
+      </svg>
+      {children}
+    </span>
+  );
+}
+
+function HeroStat({ value, note, isUnknown }: { value: number | null; note: string; isUnknown: boolean }) {
+  const display = useCountUp(isUnknown ? null : value);
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 lg:row-span-2">
+      <NetworkDecoration className="bottom-0 right-0 h-28 w-40" />
+      <div className="relative">
+        <div className="nexus-label">Personnes touchées — public externe</div>
+        <div className="nexus-hero-figure mt-3 text-foreground">
+          {isUnknown ? <span className="text-4xl italic text-muted-2">inconnu</span> : fmt(display)}
+        </div>
+        <div className="mt-5">
+          <RuleChip>{note}</RuleChip>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-border-strong">
+      <div className="nexus-label">{label}</div>
+      <div className="nexus-figure mt-2 text-4xl text-foreground md:text-5xl">{value}</div>
+      {sub && <div className="mt-1.5 text-xs text-muted">{sub}</div>}
+    </div>
+  );
+}
+
+function WideCard({ label, value, ruleNote, footNote }: { label: string; value: string; ruleNote: string; footNote?: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5 lg:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="nexus-label">{label}</div>
+        <RuleChip>{ruleNote}</RuleChip>
+      </div>
+      <div className="nexus-figure mt-2 text-4xl text-foreground md:text-5xl">{value}</div>
+      {footNote && <div className="mt-1.5 text-xs text-muted">{footNote}</div>}
+    </div>
+  );
+}
+
+function RingStat({
+  percent,
+  color,
+  size = 92,
+  strokeWidth = 9,
+}: {
+  percent: number | null;
+  color: string;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const pct = percent ?? 0;
+  const offset = circumference * (1 - Math.min(100, Math.max(0, pct)) / 100);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--border-strong)" strokeWidth={strokeWidth} />
+      {percent !== null && (
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: "stroke-dashoffset 700ms ease" }}
+        />
+      )}
+      <text
+        x="50%"
+        y="50%"
+        dominantBaseline="middle"
+        textAnchor="middle"
+        fill="var(--foreground)"
+        fontSize={size * 0.19}
+        style={{ fontVariantNumeric: "tabular-nums" }}
+      >
+        {percent !== null ? `${percent}%` : "—"}
+      </text>
+    </svg>
+  );
+}
+
+function RiseCard({ ov }: { ov: DashboardOverviewResponse["overview"] }) {
+  // Base CI dérivée des deux nombres déjà renvoyés par l'API
+  // (rise_projects et rise_pct_of_ci) -- pas une nouvelle donnée, juste
+  // l'opération inverse du pourcentage déjà calculé côté moteur, affichée
+  // pour donner le même contexte "base CI · N projets" que le brief.
+  const ciBase = ov.rise_pct_of_ci ? Math.round((ov.rise_projects / ov.rise_pct_of_ci) * 100) : null;
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5 lg:col-span-2">
+      <div className="flex flex-wrap items-center gap-6">
+        <div>
+          <div className="nexus-label">Projets RISE</div>
+          <div className="nexus-figure mt-2 text-5xl text-foreground">{fmt(ov.rise_projects)}</div>
+        </div>
+        <div className="flex flex-1 flex-wrap items-center gap-6">
+          <div className="flex items-center gap-3">
+            <RingStat percent={ov.rise_pct_of_ci} color="var(--domain-community)" />
+            <p className="max-w-[10rem] text-xs text-muted">
+              {ov.rise_pct_of_ci !== null ? (
+                <>des projets Community Impact</>
+              ) : (
+                <>aucun projet Community Impact</>
+              )}
+              <br />
+              <span className="text-muted-2">base CI · {ciBase ?? "—"} projets</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <RingStat percent={ov.rise_pct_of_all} color="var(--foreground)" />
+            <p className="max-w-[10rem] text-xs text-muted">
+              de tous les projets
+              <br />
+              <span className="text-muted-2">base tous projets · {fmt(ov.total_projects)}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between py-2.5 ${last ? "" : "border-b border-border/60"}`}>
+      <span className="text-sm text-muted">{label}</span>
+      <span className="nexus-figure text-xl text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function DomainBarList({ areas }: { areas: AreaBlock[] }) {
+  const sorted = [...areas].sort((a, b) => b.total_projects - a.total_projects);
+  const max = Math.max(1, ...sorted.map((a) => a.total_projects));
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="nexus-label">Projets par domaine</div>
+      <div className="mt-4 space-y-3">
+        {sorted.map((area) => {
+          const color = domainColor(area.label);
+          const pct = (area.total_projects / max) * 100;
+          return (
+            <div key={area.code} className="flex items-center gap-3 text-sm">
+              <span className="w-40 shrink-0 truncate text-foreground" title={area.label}>
+                <span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: color }} />
+                {area.label}
+              </span>
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
+                <span
+                  className="block h-full rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%`, background: color }}
+                />
+              </span>
+              <span className="nexus-figure w-8 text-right text-foreground">{area.total_projects}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-4 text-xs text-muted-2">Un projet peut relever de plusieurs domaines : ne pas additionner.</p>
+    </div>
+  );
+}
+
+function OddReachList({ sdgs, onSeeByOdd }: { sdgs: SdgBlock[]; onSeeByOdd: () => void }) {
+  const rows = sdgs.map((s) => ({ goal: s.goal, ...sumDirectPeople(s.aggregates, "external") }));
+  const known = rows.filter((r) => r.count > 0).sort((a, b) => b.value - a.value).slice(0, 6);
+  const unknownCount = rows.filter((r) => r.count === 0).length;
+  const max = Math.max(1, ...known.map((r) => r.value));
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-5">
+      <div className="flex items-center justify-between">
+        <div className="nexus-label">Personnes touchées par ODD · externe</div>
+        <button onClick={onSeeByOdd} className="text-xs font-medium text-accent hover:text-accent-hover">
+          Voir par ODD →
+        </button>
+      </div>
+      {known.length === 0 ? (
+        <p className="mt-4 text-sm text-muted">Aucune donnée pour ce filtre.</p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {known.map((r) => (
+            <div key={r.goal} className="flex items-center gap-3 text-sm">
+              <span className="w-44 shrink-0 truncate text-foreground">
+                <span className="mr-1.5 text-xs text-muted-2">ODD {r.goal}</span>
+                {SDG_LABELS[r.goal]}
+              </span>
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
+                <span
+                  className="block h-full rounded-full bg-accent transition-all duration-500"
+                  style={{ width: `${(r.value / max) * 100}%` }}
+                />
+              </span>
+              <span className="nexus-figure w-12 text-right text-foreground">{fmt(r.value)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {unknownCount > 0 && (
+        <p className="mt-4 text-xs italic text-muted-2">
+          {unknownCount} ODD sans donnée : inconnu (non tracés)
+        </p>
+      )}
     </div>
   );
 }
@@ -238,6 +531,7 @@ function OverviewScreen({
   trace,
   traceLoading,
   onSelect,
+  onSeeByOdd,
 }: {
   data: DashboardOverviewResponse;
   buckets: Record<DisplayBucket, Aggregate[]>;
@@ -245,6 +539,7 @@ function OverviewScreen({
   trace: TraceResponse | null;
   traceLoading: boolean;
   onSelect: (a: Aggregate) => void;
+  onSeeByOdd: () => void;
 }) {
   const ov = data.overview;
   const external = sumDirectPeople(ov.aggregates, "external");
@@ -269,52 +564,48 @@ function OverviewScreen({
       {/* Deux lectures jamais mélangées (impact-science.md §7) : "ce que JCI a
           fait" (Projets, ressources) d'un côté, "ce qui a changé" (Impact,
           bloc visuellement distinct, D-22) de l'autre. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <StatCard label="Projets" value={fmt(ov.total_projects)} sub="projets uniques" />
-        <StatCard
-          label="Personnes touchées — public externe"
-          value={external.count === 0 ? "inconnu" : fmt(external.value)}
-          sub="jamais l'audience, jamais l'indirect"
-        />
-        <StatCard
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <HeroStat value={external.value} isUnknown={external.count === 0} note="Jamais l'audience, jamais l'indirect" />
+        <KpiCard label="Projets" value={fmt(ov.total_projects)} sub="projets uniques" />
+        <KpiCard label="Heures de bénévolat" value={hours ? fmt(hours.value) : "inconnu"} sub="somme, projets uniques" />
+        <WideCard
           label="Membres JCI mobilisés / formés"
           value={internal.count === 0 ? "inconnu" : fmt(internal.value)}
-          sub="jamais additionné au public externe (R7)"
-        />
-        <StatCard label="Heures de bénévolat" value={hours ? fmt(hours.value) : "inconnu"} sub="somme, projets uniques" />
-        <StatCard label="Projets avec résultat mesuré" value={fmt(ov.projects_measured)} />
-        <StatCard
-          label="Projets RISE"
-          value={fmt(ov.rise_projects)}
-          sub={
-            // AC-31 : deux ratios, deux bases differentes, jamais confondues
-            // (c'est precisement l'ecart 53,47% RISE vs 44,64% CI du rapport
-            // JCI 2025, §1 du document de reference -- deux bases, pas une
-            // incoherence).
-            <>
-              {ov.rise_pct_of_ci !== null
-                ? `${ov.rise_pct_of_ci}% des projets Community Impact (base CI)`
-                : "aucun projet Community Impact"}
-              <br />
-              {ov.rise_pct_of_all !== null
-                ? `${ov.rise_pct_of_all}% de tous les projets (base tous projets)`
-                : null}
-            </>
+          ruleNote="Jamais additionné au public externe (R7)"
+          footNote={
+            external.count > 0 ? `Comptés séparément des ${fmt(external.value)} personnes touchées.` : undefined
           }
         />
-        <StatCard label="Pays actifs" value={fmt(ov.countries_active)} />
-        <StatCard label="OL actives" value={fmt(ov.ols_active)} />
       </div>
 
-      <section className={`rounded-lg border p-4 ${BUCKET_STYLE.impact}`}>
-        <h2 className="text-sm font-semibold uppercase tracking-wide">{BUCKET_LABEL.impact}</h2>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <RiseCard ov={ov} />
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          <StatRow label="Projets avec résultat mesuré" value={fmt(ov.projects_measured)} />
+          <StatRow label="Pays actifs" value={fmt(ov.countries_active)} />
+          <StatRow label="OL actives" value={fmt(ov.ols_active)} last />
+        </div>
+      </div>
+
+      <section className={`rounded-2xl border p-5 ${BUCKET_STYLE.impact}`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {BUCKET_LABEL.impact}
+          </h2>
+          {impactBucket.length > 0 && (
+            <span className="text-xs text-muted">issus de {fmt(ov.projects_measured)} projet(s) avec résultat mesuré</span>
+          )}
+        </div>
         {impactBucket.length === 0 ? (
           <p className="mt-2 text-sm text-muted">
             Aucun résultat mesuré (par opposition à une simple activité) pour ce filtre pour l&apos;instant.
           </p>
         ) : (
           <>
-            <div className="mt-3">
+            <div className="mt-4">
               <AggregateTable aggregates={impactBucket} onSelect={onSelect} />
             </div>
             {impactBucket.some((a) => a.measurement_id === openTraceId) && (
@@ -326,6 +617,11 @@ function OverviewScreen({
           </>
         )}
       </section>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <DomainBarList areas={data.areas} />
+        <OddReachList sdgs={data.sdgs} onSeeByOdd={onSeeByOdd} />
+      </div>
     </>
   );
 }
@@ -348,10 +644,18 @@ function AreasScreen({
         const hours = metricValue(area.aggregates, "VOLUNTEER_HOURS");
         const external = sumDirectPeople(area.aggregates, "external");
         const internal = sumDirectPeople(area.aggregates, "internal");
+        const color = domainColor(area.label);
         return (
-          <section key={area.code} className="rounded-lg border border-border bg-surface p-4">
+          <section
+            key={area.code}
+            className="rounded-2xl border border-border bg-surface p-4"
+            style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+          >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-base font-semibold uppercase tracking-wide">{area.label}</h2>
+              <h2 className="flex items-center gap-2 text-base font-semibold uppercase tracking-wide text-foreground">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+                {area.label}
+              </h2>
               <span
                 className="text-sm text-muted"
                 title={
@@ -376,24 +680,24 @@ function AreasScreen({
 
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Ce qui a été fait</h3>
+                <h3 className="nexus-label">Ce qui a été fait</h3>
                 {area.families.length === 0 ? (
                   <p className="mt-2 text-sm text-muted">Aucune famille d&apos;activité déclarée.</p>
                 ) : (
                   <ul className="mt-2 space-y-1 text-sm">
                     {area.families.map((f) => (
                       <li key={f.code} className="flex justify-between border-b border-border/60 py-0.5">
-                        <span>{f.label}</span>
-                        <span className="font-medium">{f.project_count}</span>
+                        <span className="text-foreground">{f.label}</span>
+                        <span className="font-medium text-foreground">{f.project_count}</span>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
 
-              <div className="rounded-md border border-border bg-background p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Ressources</h3>
-                <p className="mt-2 text-sm">
+              <div className="rounded-xl border border-border bg-background p-3">
+                <h3 className="nexus-label">Ressources</h3>
+                <p className="mt-2 text-sm text-foreground">
                   Bénévoles {volunteers ? fmt(volunteers.value) : "inconnu"} · Heures {hours ? fmt(hours.value) : "inconnu"}
                 </p>
                 {/* Garde-fou anti double-comptage (revue PO 2026-09-20, §17) :
@@ -404,7 +708,7 @@ function AreasScreen({
                     (secondary_only_count), qu'un tel recouvrement existe pour
                     ce domaine précis -- jamais une mise en garde générique. */}
                 {area.secondary_only_count > 0 && (
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="mt-1 text-xs text-muted-2">
                     Ressources partagées avec d&apos;autres domaines pour les projets multi-domaines.
                   </p>
                 )}
@@ -417,9 +721,9 @@ function AreasScreen({
                   l'impact au sens de NEXUS (c'est justement la distinction
                   que le produit prétend faire respecter) -- ce sont des
                   résultats mesurés, pas encore un changement de long terme. */}
-              <div className="rounded-md border border-success/50 bg-success-bg p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide">Résultats mesurés</h3>
-                <p className="mt-2 text-sm">
+              <div className="rounded-xl border border-success/30 bg-success-bg p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground">Résultats mesurés</h3>
+                <p className="mt-2 text-sm text-foreground">
                   Membres formés {internal.count === 0 ? "inconnu" : fmt(internal.value)} · Public externe
                   formé {external.count === 0 ? "inconnu" : fmt(external.value)} · Résultat mesuré :{" "}
                   {fmt(area.projects_measured)} projet(s)
@@ -428,9 +732,9 @@ function AreasScreen({
             </div>
 
             {area.code === "CI" && area.rise && (
-              <div className="mt-4 rounded-md border border-border bg-background p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">RISE</h3>
-                <p className="mt-2 text-sm">
+              <div className="mt-4 rounded-xl border border-border bg-background p-3">
+                <h3 className="nexus-label">RISE</h3>
+                <p className="mt-2 text-sm text-foreground">
                   Oui : {area.rise.yes} · Non : {area.rise.no}
                 </p>
                 {area.rise.pillars.length > 0 && (
@@ -438,7 +742,7 @@ function AreasScreen({
                     {area.rise.pillars.map((p) => (
                       <li
                         key={p.code}
-                        className="rounded-full border border-border bg-surface px-2 py-1"
+                        className="rounded-full border border-border bg-surface px-2 py-1 text-foreground"
                         title={`Code interne : ${p.code}`}
                       >
                         {risePillarLabel(p.code)} · {p.project_count}
@@ -476,7 +780,7 @@ function SdgsScreen({
     return <p className="text-sm text-muted">Aucun projet classé sur un ODD pour ce filtre.</p>;
   }
   return (
-    <section className="rounded-lg border border-border bg-surface p-4">
+    <section className="rounded-2xl border border-border bg-surface p-5">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
@@ -492,13 +796,54 @@ function SdgsScreen({
             const external = sumDirectPeople(s.aggregates, "external");
             return (
               <tr key={s.goal} className="border-b border-border/60 align-top">
-                <td className="py-2 pr-3 font-medium">
-                  ODD {s.goal} — {SDG_LABELS[s.goal]}
+                <td className="py-3 pr-3 font-medium text-foreground">
+                  <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-accent/40 bg-accent/10 text-xs text-accent">
+                    {s.goal}
+                  </span>
+                  {SDG_LABELS[s.goal]}
                 </td>
-                <td className="py-2 pr-3">{s.primary_count}</td>
-                <td className="py-2 pr-3">{s.secondary_count}</td>
-                <td className="py-2 pr-3">{external.count === 0 ? "inconnu" : fmt(external.value)}</td>
-                <td className="py-2 pr-3">
+                <td className="py-3 pr-3 text-foreground">
+                  {s.primary_count > 0 ? (
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground">
+                      {s.primary_count}
+                    </span>
+                  ) : (
+                    <span className="text-muted-2">0</span>
+                  )}
+                </td>
+                <td className="py-3 pr-3 text-foreground">
+                  {s.secondary_count > 0 ? (
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-strong text-xs text-foreground">
+                      {s.secondary_count}
+                    </span>
+                  ) : (
+                    <span className="text-muted-2">0</span>
+                  )}
+                </td>
+                <td className="py-3 pr-3">
+                  {external.count === 0 ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="italic text-muted-2">inconnu</span>
+                      <span
+                        className="h-1.5 w-24 rounded-full opacity-50"
+                        style={{
+                          backgroundImage:
+                            "repeating-linear-gradient(45deg, var(--border-strong) 0, var(--border-strong) 3px, transparent 3px, transparent 6px)",
+                        }}
+                      />
+                    </span>
+                  ) : (
+                    <span className="text-foreground">{fmt(external.value)}</span>
+                  )}
+                </td>
+                <td className="py-3 pr-3 text-foreground">
+                  {s.projects_measured > 0 && (
+                    <span className="mr-1.5 inline-flex items-center gap-1 text-success">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  )}
                   {s.projects_measured}
                   <ProjectListDisclosure
                     label="Voir les projets →"
@@ -513,7 +858,7 @@ function SdgsScreen({
           })}
         </tbody>
       </table>
-      <p className="mt-3 text-xs text-muted">
+      <p className="mt-3 text-xs text-muted-2">
         Principal et secondaire ne sont jamais additionnés en un seul chiffre (D-27).
       </p>
     </section>
